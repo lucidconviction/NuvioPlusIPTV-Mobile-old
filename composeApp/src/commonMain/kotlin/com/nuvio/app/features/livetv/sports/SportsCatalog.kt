@@ -344,6 +344,12 @@ object SportsCatalog {
         // ---- Fighting
         League("mma/ufc", Sport.FIGHTING, "UFC", "UFC", "mma/ufc", LeagueKind.EVENT, guideWords = listOf("UFC"),
             regions = EVERYWHERE, minutes = 300, color = 0xFFD20A0A),
+        League("guide/bkfc", Sport.FIGHTING, "BKFC", "BKFC", guideWords = listOf("BKFC", "Bare Knuckle", "Bare Knuckle Fighting", "Bare Knuckle FC"),
+            regions = EVERYWHERE, guideOnly = true, fixtureSlug = "bkfc", kind = LeagueKind.EVENT, color = 0xFFC8102E, liveByDefault = true),
+        League("mma/bellator", Sport.FIGHTING, "Bellator", "BELLATOR", guideWords = listOf("Bellator", "Bellator MMA", "Bellator 1"),
+            regions = EVERYWHERE, minutes = 240, color = 0xFF1A1A2E),
+        League("guide/one", Sport.FIGHTING, "ONE Championship", "ONE", guideWords = listOf("ONE Championship", "ONE FC", "ONE MMA", "ONE Fight Night", "ONE Friday Fights"),
+            regions = EVERYWHERE, guideOnly = true, fixtureSlug = "one-championship", kind = LeagueKind.EVENT, color = 0xFF000000, liveByDefault = true),
         League("guide/boxing", Sport.FIGHTING, "Boxing", "BOXING", guideWords = listOf("Boxing"), regions = EVERYWHERE,
             guideOnly = true, fixtureSlug = "boxing", kind = LeagueKind.EVENT, color = 0xFF7A1F1F),
         // ---- Wrestling (from the guide: weekly shows and big events)
