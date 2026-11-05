@@ -199,7 +199,9 @@ data class SportsSettings(
     /** Channel groups (lowercase names) whose channels go to the top of every game's list. */
     val preferredGroups: Set<String> = emptySet(),
     /** "Channels from" on the game page ("" = all; see [ChannelRegions]). */
-    val channelRegion: String = ""
+    val channelRegion: String = "",
+        /** CitoAPI key for fight cards (BKFC, UFC, ONE, Bellator…). Empty = no bout list. */
+        val citoKey: String = ""
 ) {
     fun toJson(): String = JSONObject()
         .put("showInSidebar", showInSidebar)
@@ -221,6 +223,7 @@ data class SportsSettings(
         .put("leagueChannels", JSONObject(leagueChannels as Map<*, *>))
         .put("preferredGroups", JSONArray(preferredGroups.toList()))
         .put("channelRegion", channelRegion)
+        .put("citoKey", citoKey)
         .toString()
 
     companion object {
@@ -249,7 +252,8 @@ data class SportsSettings(
                     teamChannels = o.optJSONObject("teamChannels").stringMap(),
                     leagueChannels = o.optJSONObject("leagueChannels").stringMap(),
                     preferredGroups = o.optJSONArray("preferredGroups").strings().toSet(),
-                    channelRegion = o.optString("channelRegion", "")
+                    channelRegion = o.optString("channelRegion", ""),
+                    citoKey = o.optString("citoKey", "")
                 )
             }.getOrDefault(SportsSettings())
         }

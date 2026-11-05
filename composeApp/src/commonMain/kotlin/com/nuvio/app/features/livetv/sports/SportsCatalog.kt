@@ -350,6 +350,12 @@ object SportsCatalog {
             regions = EVERYWHERE, minutes = 240, color = 0xFF1A1A2E),
         League("guide/one", Sport.FIGHTING, "ONE Championship", "ONE", guideWords = listOf("ONE Championship", "ONE FC", "ONE MMA", "ONE Fight Night", "ONE Friday Fights"),
             regions = EVERYWHERE, guideOnly = true, fixtureSlug = "one-championship", kind = LeagueKind.EVENT, color = 0xFF000000, liveByDefault = true),
+        League("guide/rizin", Sport.FIGHTING, "RIZIN", "RIZIN", guideWords = listOf("RIZIN", "RIZIN FF", "RIZIN Fighting Federation"),
+            regions = EVERYWHERE, guideOnly = true, kind = LeagueKind.EVENT, color = 0xFFFFD700, liveByDefault = true),
+        League("guide/cage-warriors", Sport.FIGHTING, "Cage Warriors", "CW", guideWords = listOf("Cage Warriors", "Cage Warriors FC"),
+            regions = EVERYWHERE, guideOnly = true, kind = LeagueKind.EVENT, color = 0xFF1E3A8A, liveByDefault = true),
+        League("guide/ksw", Sport.FIGHTING, "KSW", "KSW", guideWords = listOf("KSW", "Konfrontacja Sztuk Walki"),
+            regions = EVERYWHERE, guideOnly = true, kind = LeagueKind.EVENT, color = 0xFFDC2626, liveByDefault = true),
         League("guide/boxing", Sport.FIGHTING, "Boxing", "BOXING", guideWords = listOf("Boxing"), regions = EVERYWHERE,
             guideOnly = true, fixtureSlug = "boxing", kind = LeagueKind.EVENT, color = 0xFF7A1F1F),
         // ---- Wrestling (from the guide: weekly shows and big events)

@@ -264,6 +264,10 @@ internal object SportsRepository {
         if (started) return
         started = true
         LiveTvPlayback.gameFailover = { key, tried -> nextChannelForGame(key, tried) }
+        // Apply CitoAPI key from settings as soon as we start.
+        scope.launch {
+            settings.collect { cfg -> SportsFeeds.setCitoKey(cfg.citoKey.ifBlank { null }) }
+        }
         scope.launch {
             runCatching { withContext(Dispatchers.Default) { loadCache() } }
             runCatching { updateLoop() }

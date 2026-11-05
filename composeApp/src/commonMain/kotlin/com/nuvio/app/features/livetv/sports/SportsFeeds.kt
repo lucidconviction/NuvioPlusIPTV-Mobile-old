@@ -121,6 +121,79 @@ internal class SportsFeeds {
         const val DATA_URL = "https://raw.githubusercontent.com/homelessbrian/nuvio-data/main/"
         const val WRESTLING_URL = DATA_URL + "wrestling.json"
 
+        /**
+         * CitoAPI: fight cards for BKFC, UFC, Bellator, ONE and other MMA promotions.
+         * Needs a key (free tier: 500 req/month at citoapi.com). Without one, fight cards come
+         * from the guide instead — the Sports page still works, just without the bout list.
+         */
+        const val CITO_URL = "https://api.citoapi.com/api/v1"
+        var citoKey: String? = null
+            private set
+
+        /** Set the CitoAPI key from the user's Sports settings (or leave null to skip it). */
+        fun setCitoKey(key: String?) { citoKey = key?.takeIf { it.isNotBlank() } }
+
+        /** The CitoAPI slug for a league ("bkfc-97-hollywood"), or null when it has no CitoAPI card. */
+        fun citoSlug(league: League): String? = when (league.id) {
+            "guide/bkfc" -> "bkfc"
+            "mma/ufc" -> "ufc"
+            "mma/bellator" -> "bellator"
+            "guide/one" -> "one"
+            "guide/boxing" -> "boxing"
+            else -> null
+        }
+
+        /** A fight card for [league]'s [slug] (e.g. "bkfc-97-hollywood"), or null when there's no key. */
+        suspend fun fightCard(league: League, slug: String, get: suspend (String) -> String): FightCard? {
+            val key = citoKey ?: return null
+            val org = citoSlug(league) ?: return null
+            val raw = runCatching { get("$CITO_URL/$org/events/$slug/bouts") }.getOrNull() ?: return null
+            val root = runCatching { JSONObject(raw) }.getOrNull() ?: return null
+            val ev = root.optJSONObject("event") ?: return null
+            val boutsArr = root.optJSONArray("bouts") ?: return null
+            val bouts = (0 until boutsArr.length()).mapNotNull { i ->
+                val b = boutsArr.optJSONObject(i) ?: return@mapNotNull null
+                val f1 = b.optJSONObject("fighter1") ?: return@mapNotNull null
+                val f2 = b.optJSONObject("fighter2") ?: return@mapNotNull null
+                FightBout(
+                    id = b.str("id") ?: "",
+                    order = b.optInt("order", i + 1),
+                    weightClass = b.str("weightClass") ?: b.str("weight_class"),
+                    type = b.str("type"),
+                    rounds = b.optInt("rounds", 0).takeIf { it > 0 },
+                    fighter1 = f1.str("name") ?: "",
+                    fighter2 = f2.str("name") ?: "",
+                    record1 = f1.str("record"),
+                    record2 = f2.str("record")
+                )
+            }
+            return FightCard(
+                eventId = ev.str("slug") ?: slug,
+                name = ev.str("name") ?: league.name,
+                date = ev.str("date"),
+                venue = ev.str("venue"),
+                bouts = bouts
+            )
+        }
+
+        /** The upcoming cards for [league], newest first (CitoAPI). */
+        suspend fun upcomingCards(league: League, get: suspend (String) -> String): List<FightCard> {
+            val key = citoKey ?: return emptyList()
+            val org = citoSlug(league) ?: return emptyList()
+            val raw = runCatching { get("$CITO_URL/$org/events/upcoming") }.getOrNull() ?: return emptyList()
+            val arr = runCatching { JSONObject(raw).optJSONArray("events") ?: JSONArray() }.getOrNull() ?: return emptyList()
+            return (0 until arr.length()).mapNotNull { i ->
+                val e = arr.optJSONObject(i) ?: return@mapNotNull null
+                FightCard(
+                    eventId = e.str("slug") ?: "",
+                    name = e.str("name") ?: league.name,
+                    date = e.str("date"),
+                    venue = e.str("venue"),
+                    bouts = emptyList()
+                )
+            }
+        }
+
         /** A league id as the shared ESPN cache file is named ("football/nfl" -> "football_nfl"). */
         fun safeFileId(id: String): String = id.replace(Regex("[^a-zA-Z0-9]+"), "_")
 
