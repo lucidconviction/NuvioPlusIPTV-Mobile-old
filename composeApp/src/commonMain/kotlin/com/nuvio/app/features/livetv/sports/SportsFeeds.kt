@@ -133,24 +133,24 @@ internal class SportsFeeds {
         /** Set the CitoAPI key from the user's Sports settings (or leave null to skip it). */
         fun setCitoKey(key: String?) { citoKey = key?.takeIf { it.isNotBlank() } }
 
-        /** The CitoAPI slug for a league ("bkfc-97-hollywood"), or null when it has no CitoAPI card. */
+        /** The CitoAPI slug for a league ("bkfc", "ufc", "bellator", "pfl"), or null when it has no CitoAPI card. */
         fun citoSlug(league: League): String? = when (league.id) {
             "guide/bkfc" -> "bkfc"
             "mma/ufc" -> "ufc"
             "mma/bellator" -> "bellator"
-            "guide/one" -> "one"
-            "guide/boxing" -> "boxing"
+            "mma/pfl" -> "pfl"
             else -> null
         }
 
         /** A fight card for [league]'s [slug] (e.g. "bkfc-97-hollywood"), or null when there's no key. */
-        suspend fun fightCard(league: League, slug: String, get: suspend (String) -> String): FightCard? {
+        suspend fun fightCard(league: League, slug: String, get: suspend (String, String, String) -> String): FightCard? {
             val key = citoKey ?: return null
             val org = citoSlug(league) ?: return null
-            val raw = runCatching { get("$CITO_URL/$org/events/$slug/bouts") }.getOrNull() ?: return null
+            val raw = runCatching { get("$CITO_URL/$org/events/$slug/bouts", "x-api-key", key) }.getOrNull() ?: return null
             val root = runCatching { JSONObject(raw) }.getOrNull() ?: return null
-            val ev = root.optJSONObject("event") ?: return null
-            val boutsArr = root.optJSONArray("bouts") ?: return null
+            val data = root.optJSONObject("data") ?: return null
+            val ev = data.optJSONObject("event") ?: return null
+            val boutsArr = data.optJSONArray("bouts") ?: return null
             val bouts = (0 until boutsArr.length()).mapNotNull { i ->
                 val b = boutsArr.optJSONObject(i) ?: return@mapNotNull null
                 val f1 = b.optJSONObject("fighter1") ?: return@mapNotNull null
@@ -177,11 +177,12 @@ internal class SportsFeeds {
         }
 
         /** The upcoming cards for [league], newest first (CitoAPI). */
-        suspend fun upcomingCards(league: League, get: suspend (String) -> String): List<FightCard> {
+        suspend fun upcomingCards(league: League, get: suspend (String, String, String) -> String): List<FightCard> {
             val key = citoKey ?: return emptyList()
             val org = citoSlug(league) ?: return emptyList()
-            val raw = runCatching { get("$CITO_URL/$org/events/upcoming") }.getOrNull() ?: return emptyList()
-            val arr = runCatching { JSONObject(raw).optJSONArray("events") ?: JSONArray() }.getOrNull() ?: return emptyList()
+            val raw = runCatching { get("$CITO_URL/$org/events/upcoming", "x-api-key", key) }.getOrNull() ?: return emptyList()
+            val data = runCatching { JSONObject(raw).optJSONObject("data") }.getOrNull()
+            val arr = data?.optJSONArray("events") ?: JSONArray()
             return (0 until arr.length()).mapNotNull { i ->
                 val e = arr.optJSONObject(i) ?: return@mapNotNull null
                 FightCard(

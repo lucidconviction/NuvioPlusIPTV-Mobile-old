@@ -68,7 +68,9 @@ data class GameExtras(
     val draw: Double? = null,
     /** The home team's chance through the game (0–1), oldest first. */
     val winHistory: List<Float> = emptyList(),
-    val lineups: List<Lineup> = emptyList()
+    val lineups: List<Lineup> = emptyList(),
+    /** A fight card for this event (MMA/Combat sports). */
+    val fightCard: FightCard? = null
 ) {
     val hasMatchInfo: Boolean get() = venue != null || tempF != null || referee != null || attendance != null
     val hasOdds: Boolean get() = homeWin != null && awayWin != null
