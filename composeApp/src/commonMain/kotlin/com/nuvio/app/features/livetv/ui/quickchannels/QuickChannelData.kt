@@ -134,6 +134,17 @@ object QuickChannelList {
     /** Returns true if the channel is custom (user-created). */
     fun isCustomChannel(displayName: String): Boolean = _customChannels.any { it.displayName == displayName }
 
+    /** Returns all unique regions used across default + custom channels, sorted, with "CUSTOM" first. */
+    fun allRegions(): List<String> {
+        val regions = mutableSetOf<String>()
+        (defaultChannels + _customChannels).forEach { qc ->
+            qc.regions.forEach { regions.add(it) }
+            if (qc.regions.isEmpty()) regions.add("CUSTOM")
+        }
+        if (regions.isEmpty()) regions.add("CUSTOM")
+        return listOf("CUSTOM") + regions.filter { it != "CUSTOM" }.sorted()
+    }
+
     /** Returns true if [quickChannel] matches the given [channel]. */
     fun matches(quickChannel: QuickChannel, channel: LiveChannel): Boolean {
         // Region-sweep channels special-case on name+group via word-boundary regex

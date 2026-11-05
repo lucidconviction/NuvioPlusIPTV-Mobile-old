@@ -138,10 +138,12 @@ fun QuickChannelsSheet(
                 // Add custom region button
                 IconButton(onClick = { showAddRegionDialog = true }) {
                     Icon(Icons.Default.Add, contentDescription = "Add Region", tint = tokens.accent)
+                    Text("+Reg", style = MaterialTheme.typography.labelMedium, color = tokens.accent)
                 }
                 // Add custom channel button
                 IconButton(onClick = { showAddChannelDialog = true }) {
                     Icon(Icons.Default.Add, contentDescription = "Add Channel", tint = tokens.accent)
+                    Text("+CH", style = MaterialTheme.typography.labelMedium, color = tokens.accent)
                 }
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Default.Close, contentDescription = "Close", tint = tokens.textSecondary)
@@ -537,12 +539,7 @@ private fun ChannelDialogImpl(
     var channelTags by remember { mutableStateOf(initialTags) }
 
     // Available regions for dropdown
-    val availableRegions = remember {
-        listOf(
-            "CUSTOM", "US", "UK", "CA", "BAY-AREA", "EU", "AU", "IN", "PK", "LA",
-            "PREMIUM", "SPORTS", "NEWS", "ENTERTAINMENT", "KIDS", "BROADCAST", "REGIONAL"
-        )
-    }
+    val availableRegions = remember { QuickChannelList.allRegions() }
     var showRegionDropdown by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -595,7 +592,7 @@ private fun ChannelDialogImpl(
                         contentAlignment = Alignment.CenterStart,
                     ) {
                         Text(
-                            text = if (channelRegions.isBlank()) "Select regions…" else channelRegions,
+                            text = if (channelRegions.isBlank()) "All Regions" else channelRegions,
                             color = if (channelRegions.isBlank()) tokens.textMuted else tokens.textPrimary,
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier
@@ -615,16 +612,23 @@ private fun ChannelDialogImpl(
                         expanded = showRegionDropdown,
                         onDismissRequest = { showRegionDropdown = false },
                     ) {
+                        DropdownMenuItem(
+                            onClick = {
+                                channelRegions = "All Regions"
+                                showRegionDropdown = false
+                            },
+                            text = {
+                                Text(
+                                    "All Regions",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = tokens.textPrimary,
+                                )
+                            },
+                        )
                         availableRegions.forEach { region ->
                             DropdownMenuItem(
                                 onClick = {
-                                    val currentRegions = channelRegions.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }.toMutableSet()
-                                    if (currentRegions.contains(region)) {
-                                        currentRegions.remove(region)
-                                    } else {
-                                        currentRegions.add(region)
-                                    }
-                                    channelRegions = currentRegions.joinToString(", ")
+                                    channelRegions = region
                                     showRegionDropdown = false
                                 },
                                 text = {
