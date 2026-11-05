@@ -317,11 +317,11 @@ fun QuickChannelsSheet(
     if (showAddRegionDialog) {
         AddRegionDialog(
             onDismiss = { showAddRegionDialog = false },
-            onAdd = { id, title, description, tags ->
+            onAdd = { title, tags ->
                 val category = QuickChannelList.QuickCategory(
-                    id = id.trim().lowercase().replace(" ", "-"),
+                    id = title.trim().lowercase().replace(" ", "-"),
                     title = title.trim(),
-                    description = description.trim(),
+                    description = "",
                     tags = tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
                 )
                 QuickChannelList.addCustomCategory(category)
@@ -354,11 +354,11 @@ fun QuickChannelsSheet(
         EditRegionDialog(
             region = region,
             onDismiss = { showEditRegionDialog = false; editingRegion = null },
-            onEdit = { id, title, description, tags ->
+            onEdit = { title, tags ->
                 val category = QuickChannelList.QuickCategory(
-                    id = id.trim().lowercase().replace(" ", "-"),
+                    id = region.id,
                     title = title.trim(),
-                    description = description.trim(),
+                    description = "",
                     tags = tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
                 )
                 QuickChannelList.updateCustomCategory(region.id, category)
@@ -393,35 +393,31 @@ fun QuickChannelsSheet(
 @Composable
 private fun AddRegionDialog(
     onDismiss: () -> Unit,
-    onAdd: (String, String, String, String) -> Unit,
+    onAdd: (String, String) -> Unit,
 ) {
-    RegionDialogImpl(title = "Add Custom Region", initialId = "", initialTitle = "", initialDescription = "", initialTags = "", confirmText = "Add", onDismiss = onDismiss, onSubmit = onAdd)
+    RegionDialogImpl(title = "Add Custom Region", initialTitle = "", initialTags = "", confirmText = "Add", onDismiss = onDismiss, onSubmit = onAdd)
 }
 
 @Composable
 private fun EditRegionDialog(
     region: QuickChannelList.QuickCategory,
     onDismiss: () -> Unit,
-    onEdit: (String, String, String, String) -> Unit,
+    onEdit: (String, String) -> Unit,
 ) {
-    RegionDialogImpl(title = "Edit Region", initialId = region.id, initialTitle = region.title, initialDescription = region.description, initialTags = region.tags.joinToString(","), confirmText = "Save", onDismiss = onDismiss, onSubmit = onEdit)
+    RegionDialogImpl(title = "Edit Region", initialTitle = region.title, initialTags = region.tags.joinToString(","), confirmText = "Save", onDismiss = onDismiss, onSubmit = onEdit)
 }
 
 @Composable
 private fun RegionDialogImpl(
     title: String,
-    initialId: String,
     initialTitle: String,
-    initialDescription: String,
     initialTags: String,
     confirmText: String,
     onDismiss: () -> Unit,
-    onSubmit: (String, String, String, String) -> Unit,
+    onSubmit: (String, String) -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio.colors
-    var regionId by remember { mutableStateOf(initialId) }
     var regionTitle by remember { mutableStateOf(initialTitle) }
-    var regionDescription by remember { mutableStateOf(initialDescription) }
     var regionTags by remember { mutableStateOf(initialTags) }
 
     AlertDialog(
@@ -430,39 +426,9 @@ private fun RegionDialogImpl(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 OutlinedTextField(
-                    value = regionId,
-                    onValueChange = { regionId = it },
-                    label = { Text("Region ID (e.g., my-region)", color = tokens.textMuted) },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = tokens.surfaceCard,
-                        unfocusedContainerColor = tokens.surfaceCard,
-                        focusedBorderColor = tokens.accent,
-                        unfocusedBorderColor = tokens.textMuted.copy(alpha = 0.4f),
-                        focusedLabelColor = tokens.accent,
-                        unfocusedLabelColor = tokens.textMuted,
-                        cursorColor = tokens.accent,
-                    ),
-                )
-                OutlinedTextField(
                     value = regionTitle,
                     onValueChange = { regionTitle = it },
                     label = { Text("Display Title (e.g., My Region)", color = tokens.textMuted) },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = tokens.surfaceCard,
-                        unfocusedContainerColor = tokens.surfaceCard,
-                        focusedBorderColor = tokens.accent,
-                        unfocusedBorderColor = tokens.textMuted.copy(alpha = 0.4f),
-                        focusedLabelColor = tokens.accent,
-                        unfocusedLabelColor = tokens.textMuted,
-                        cursorColor = tokens.accent,
-                    ),
-                )
-                OutlinedTextField(
-                    value = regionDescription,
-                    onValueChange = { regionDescription = it },
-                    label = { Text("Description (optional)", color = tokens.textMuted) },
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = tokens.surfaceCard,
@@ -492,7 +458,7 @@ private fun RegionDialogImpl(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSubmit(regionId, regionTitle, regionDescription, regionTags) }) {
+            TextButton(onClick = { onSubmit(regionTitle, regionTags) }) {
                 Text(confirmText, color = tokens.accent)
             }
         },
