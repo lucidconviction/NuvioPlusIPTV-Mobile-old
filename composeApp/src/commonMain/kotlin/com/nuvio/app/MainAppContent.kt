@@ -271,6 +271,20 @@ internal fun MainAppContent(
         val uriHandler = LocalUriHandler.current
         val coroutineScope = rememberCoroutineScope()
         var selectedTab by rememberSaveable(initialTab) { mutableStateOf(initialTab) }
+        val openAddonCatalogAction: (String, com.nuvio.app.features.addons.AddonCatalog) -> Unit = { manifestUrl, catalog ->
+            val launchId = CatalogLaunchStore.put(
+                CatalogLaunch(
+                    title = catalog.name,
+                    subtitle = "",
+                    target = com.nuvio.app.features.catalog.CatalogTarget.Addon(
+                        manifestUrl = manifestUrl,
+                        contentType = catalog.type,
+                        catalogId = catalog.id,
+                    ),
+                ),
+            )
+            navController.navigate(CatalogRoute(launchId = launchId, title = catalog.name))
+        }
         var searchFocusRequestCount by remember { mutableStateOf(0) }
         val homeScrollToTopRequests = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
         val searchScrollToTopRequests = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
@@ -449,6 +463,7 @@ internal fun MainAppContent(
                 searchScrollToTopRequests.tryEmit(Unit)
             }
             AppScreenTab.Library -> libraryScrollToTopRequests.tryEmit(Unit)
+            AppScreenTab.YouTube -> Unit
             AppScreenTab.LiveTv -> liveTvScrollToTopRequests.tryEmit(Unit)
             AppScreenTab.Settings -> settingsRootActionRequests.tryEmit(Unit)
         }
@@ -954,6 +969,24 @@ internal fun MainAppContent(
                 }
                 navController.navigate(PlayerRoute(launchId = launchId, title = program.title))
             }
+        }
+
+        fun openYouTubeVideo(request: com.nuvio.app.features.youtube.YouTubePlayRequest) {
+            val playerLaunch = PlayerLaunch(
+                profileId = activePlaybackProfileId,
+                title = request.title,
+                sourceUrl = request.url,
+                poster = request.poster,
+                streamTitle = request.title,
+                providerName = "YouTube",
+                contentType = "youtube",
+                videoId = request.videoId,
+                parentMetaId = "youtube:" + request.videoId,
+                parentMetaType = "youtube",
+                initialPositionMs = request.startPositionMs ?: 0L,
+            )
+            val launchId = PlayerLaunchStore.put(playerLaunch)
+            navController.navigate(PlayerRoute(launchId = launchId, title = playerLaunch.title))
         }
 
         val sportsActions = SportsActions(
@@ -1592,6 +1625,7 @@ internal fun MainAppContent(
                                 },
                                 onCollectionsSettingsClick = { navController.navigate(CollectionsRoute(collectionsTitle)) },
                                 onWatchPartySettingsClick = { navController.navigate(PartyRoute(title = watchPartyTitle)) },
+                                onYouTubePlay = ::openYouTubeVideo,
                                 onLiveTvPlay = ::openLiveChannel,
                                 onLiveTvReplay = ::openLiveCatchup,
                                 onLiveTvOnDemandClick = { navController.navigate(LiveTvOnDemandRoute(liveTvOnDemandTitle)) },
@@ -1599,6 +1633,8 @@ internal fun MainAppContent(
                                 onLiveTvGuideClick = { navController.navigate(LiveTvGuideRoute(liveTvGuideTitle)) },
                                 onLiveTvSportsClick = { navController.navigate(LiveTvSportsRoute(liveTvSportsTitle)) },
                                 onLiveTvManageClick = { navController.navigate(LiveTvManageRoute(liveTvManageTitle)) },
+                                onLiveTvOpenAddonCatalog = openAddonCatalogAction,
+                                onLiveTvOpenAddonSettings = { navController.navigate(AddonsSettingsRoute(addonsSettingsTitle)) },
                                 onLiveTvSettingsClick = {
                                     if (useNativeNavigation && !isTabletLayout) {
                                         activateTab(AppScreenTab.Settings)

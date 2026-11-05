@@ -74,6 +74,7 @@ import com.nuvio.app.core.ui.NuvioShelfSection
 import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
+import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.livetv.data.LiveTvPreferences
 import com.nuvio.app.features.livetv.ondemand.OnDemandGroups
 import com.nuvio.app.features.livetv.ondemand.OnDemandPlayback
@@ -144,16 +145,23 @@ internal fun OnDemandScreen(
     }
     // Playlist dropdown: the providers that have On Demand titles; one pick limits every row to it.
     val allPlaylists by LiveTvPreferences.playlists.collectAsStateWithLifecycle()
+    val addonUiState by AddonRepository.uiState.collectAsStateWithLifecycle()
+    val addons = addonUiState.addons
     val savedPlaylist by PlaylistFilter.selected.collectAsStateWithLifecycle()
-    val playlistChoices = remember(categories, allPlaylists) {
-        allPlaylists.mapNotNull { p ->
+    val playlistChoices = remember(categories, allPlaylists, addons) {
+        val baseChoices = allPlaylists.mapNotNull { p ->
             val n = categories.count { it.playlistId == p.id }
             if (n > 0) PlaylistChoice(p.id, p.name, if (n == 1) "1 group" else "$n groups") else null
         }
+        val addonChoices = addons.filter { it.manifest != null && it.manifest!!.catalogs.isNotEmpty() }.map { addon ->
+            val manifest = addon.manifest!!
+            PlaylistChoice("addon:${addon.manifestUrl}", manifest.name, "${manifest.catalogs.size} catalog${if (manifest.catalogs.size != 1) "s" else ""}")
+        }
+        baseChoices + addonChoices
     }
     val playlistId = PlaylistFilter.effective(savedPlaylist, playlistChoices.map { it.id })
     val otherPlaylists = remember(categories, playlistId) {
-        if (playlistId == null) emptySet() else categories.filter { it.playlistId != playlistId }.mapTo(HashSet()) { it.uid }
+        if (playlistId == null || playlistId.startsWith("addon:")) emptySet() else categories.filter { it.playlistId != playlistId }.mapTo(HashSet()) { it.uid }
     }
     val hiddenOrLocked = remember(user.vodHiddenCategories, lockedUids, otherPlaylists) { user.vodHiddenCategories + lockedUids + otherPlaylists }
     var unlockCategory by remember { mutableStateOf<VodCategory?>(null) }
@@ -193,7 +201,14 @@ internal fun OnDemandScreen(
             choices = playlistChoices,
             selectedId = playlistId,
             allDetail = categories.size.let { if (it == 1) "1 group" else "$it groups" },
-            onSelect = PlaylistFilter::select,
+            onSelect = { id ->
+                if (id != null && id.startsWith("addon:")) {
+                    // For addons in On Demand, select "All playlists" to show all content
+                    PlaylistFilter.select(null)
+                } else {
+                    PlaylistFilter.select(id)
+                }
+            },
             modifier = Modifier.padding(horizontal = NuvioTokens.Space.s16, vertical = NuvioTokens.Space.s4),
         )
         AnimatedVisibility(visible = searching) {

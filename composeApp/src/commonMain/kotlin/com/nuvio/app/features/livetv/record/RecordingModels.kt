@@ -111,7 +111,7 @@ data class ChannelSnapshot(
 ) {
     fun toChannel(): LiveChannel = LiveChannel(
         key = key, sourceId = sourceId, sourceName = "", name = name, tvgId = null, tvgName = null,
-        logo = logo, groupId = "", group = "", number = 0, url = url, headers = headers, catchup = catchup
+        logo = logo, thumbnail = null, groupId = "", group = "", number = 0, url = url, headers = headers, catchup = catchup
     )
 
     fun toJson(): JsonObject = buildJsonObject {

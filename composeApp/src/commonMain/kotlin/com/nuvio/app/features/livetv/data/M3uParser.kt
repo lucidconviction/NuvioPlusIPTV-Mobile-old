@@ -10,6 +10,7 @@ data class M3uEntry(
     val tvgId: String?,
     val tvgName: String?,
     val logo: String?,
+    val image: String? = null,
     val group: String?,
     val chno: Int?,
     val url: String,
@@ -202,6 +203,7 @@ object M3uParser {
             tvgId = attrs["tvg-id"]?.trim()?.ifEmpty { null },
             tvgName = attrs["tvg-name"]?.trim()?.ifEmpty { null },
             logo = (attrs["tvg-logo"] ?: attrs["logo"])?.trim()?.ifEmpty { null },
+            image = attrs["image"]?.trim()?.ifEmpty { null } ?: attrs["stream_icon"]?.trim()?.ifEmpty { null },
             group = (attrs["group-title"]?.trim()?.ifEmpty { null } ?: extGroup)
                 ?.split(';')?.firstOrNull()?.trim(),
             chno = (attrs["tvg-chno"] ?: attrs["channel-number"] ?: attrs["tvg-num"])?.trim()?.toIntOrNull(),

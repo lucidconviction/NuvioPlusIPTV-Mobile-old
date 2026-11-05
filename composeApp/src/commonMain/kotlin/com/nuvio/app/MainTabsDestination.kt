@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -104,6 +105,12 @@ internal fun MainTabsDestination(
                 drawable = Res.drawable.sidebar_library,
                 label = stringResource(Res.string.compose_nav_library),
             ),
+            if (com.nuvio.app.features.youtube.YouTubeHost.available) FloatingNavigationItem(
+                selected = selectedTab == AppScreenTab.YouTube,
+                onClick = { onTabSelected(AppScreenTab.YouTube) },
+                icon = Icons.Filled.PlayCircle,
+                label = "YouTube",
+            ) else null,
             if (showLiveTvTab) FloatingNavigationItem(
                 selected = selectedTab == AppScreenTab.LiveTv,
                 onClick = { onTabSelected(AppScreenTab.LiveTv) },
@@ -154,6 +161,14 @@ internal fun MainTabsDestination(
                             icon = Res.drawable.sidebar_library,
                             contentDescription = stringResource(Res.string.compose_nav_library),
                         )
+                        if (com.nuvio.app.features.youtube.YouTubeHost.available) {
+                            NavItem(
+                                selected = selectedTab == AppScreenTab.YouTube,
+                                onClick = { onTabSelected(AppScreenTab.YouTube) },
+                                icon = Icons.Filled.PlayCircle,
+                                contentDescription = "YouTube",
+                            )
+                        }
                         if (showLiveTvTab) {
                             NavItem(
                                 selected = selectedTab == AppScreenTab.LiveTv,

@@ -33,9 +33,14 @@ import com.nuvio.app.features.home.HomeScreen
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.library.LibraryItem
 import com.nuvio.app.features.library.LibraryScreen
+import com.nuvio.app.CatalogLaunch
+import com.nuvio.app.CatalogLaunchStore
+import com.nuvio.app.navigation.CatalogRoute
 import com.nuvio.app.features.livetv.model.EpgProgram
 import com.nuvio.app.features.livetv.model.LiveChannel
 import com.nuvio.app.features.livetv.ui.LiveTvScreen
+import com.nuvio.app.features.livetv.ui.addonscatalog.AddonCatalogScreen
+import com.nuvio.app.features.livetv.ui.quickchannels.QuickChannelsSheet
 import com.nuvio.app.features.library.LibrarySection
 import com.nuvio.app.features.library.LibrarySortOption
 import com.nuvio.app.features.profiles.NuvioProfile
@@ -101,6 +106,7 @@ internal data class AppTabActions(
     val onConnectCloudClick: (() -> Unit)? = null,
     val onDownloadsClick: () -> Unit = {},
     val onContinueWatchingClick: ((ContinueWatchingItem) -> Unit)? = null,
+    val onYouTubePlay: ((com.nuvio.app.features.youtube.YouTubePlayRequest) -> Unit)? = null,
     val onContinueWatchingLongPress: ((ContinueWatchingItem) -> Unit)? = null,
     val onSwitchProfile: (() -> Unit)? = null,
     val onSettingsPageClick: ((pageName: String, title: String) -> Unit)? = null,
@@ -127,6 +133,8 @@ internal data class AppTabActions(
     val onLiveTvRecordingsClick: () -> Unit = {},
     val onLiveTvSportsClick: () -> Unit = {},
     val onLiveTvManageClick: () -> Unit = {},
+    val onLiveTvOpenAddonCatalog: (manifestUrl: String, catalog: com.nuvio.app.features.addons.AddonCatalog) -> Unit = { _, _ -> },
+    val onLiveTvOpenAddonSettings: () -> Unit = {},
 )
 
 @Composable
@@ -190,6 +198,13 @@ internal fun AppTabHost(
                 )
             }
 
+            AppScreenTab.YouTube -> {
+                com.nuvio.app.features.youtube.YouTubeHost.screen?.invoke(
+                    Modifier.fillMaxSize(),
+                    actions.onYouTubePlay ?: {},
+                )
+            }
+
             AppScreenTab.LiveTv -> {
                 LiveTvScreen(
                     modifier = Modifier.fillMaxSize(),
@@ -202,6 +217,8 @@ internal fun AppTabHost(
                     onOpenRecordings = actions.onLiveTvRecordingsClick,
                     onOpenSports = actions.onLiveTvSportsClick,
                     onOpenManage = actions.onLiveTvManageClick,
+                    onOpenAddonCatalog = actions.onLiveTvOpenAddonCatalog,
+                    onOpenAddonSettings = actions.onLiveTvOpenAddonSettings,
                 )
             }
 

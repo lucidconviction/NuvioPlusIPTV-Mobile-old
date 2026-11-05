@@ -28,6 +28,7 @@ internal fun PlayerDestination(
     launchExternalPlayer: (ExternalPlayerIntentResult.Success) -> Boolean,
     openExternalStreamUrl: (String) -> Boolean,
     onOpenPartyMedia: (PartyMedia) -> Unit,
+    onQuickChannelsClick: (() -> Unit)? = null,
 ) {
     val onBack = rememberGuardedPopBackStack(navController, route)
     val launch = remember(route.launchId) { PlayerLaunchStore.get(route.launchId) }
@@ -129,6 +130,7 @@ internal fun PlayerDestination(
             openExternalStreamUrl(url)
         },
         onOpenPartyMedia = onOpenPartyMedia,
+        onQuickChannelsClick = onQuickChannelsClick,
         modifier = Modifier.fillMaxSize(),
     )
 }

@@ -129,6 +129,7 @@ internal fun FoldControls(
     onSpeedClick: () -> Unit,
     onResizeModeClick: () -> Unit,
     onVideoSettingsClick: (() -> Unit)?,
+    onQuickChannelsClick: (() -> Unit)?,
     onOpenInExternalPlayer: (() -> Unit)?,
     onStreamInfoClick: () -> Unit,
     onSubmitIntroClick: (() -> Unit)?,

@@ -457,6 +457,7 @@ internal object LiveTvRepository {
                     tvgId = e.tvgId,
                     tvgName = e.tvgName,
                     logo = e.logo,
+                    thumbnail = e.image,
                     groupId = if (multi) "${pl.id}::$groupTitle" else groupTitle,
                     group = groupTitle,
                     number = number,

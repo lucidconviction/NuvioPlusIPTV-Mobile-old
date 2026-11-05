@@ -2,6 +2,7 @@ package com.nuvio.app.features.livetv.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.gestures.scrollBy
@@ -11,7 +12,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ChildCare
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.CircularProgressIndicator
+import com.nuvio.app.core.ui.Menu
+import com.nuvio.app.core.ui.MenuItem
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
@@ -39,7 +47,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -54,11 +67,23 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -68,6 +93,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -82,6 +108,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -93,6 +120,7 @@ import com.nuvio.app.core.ui.NuvioProgressBar
 import com.nuvio.app.core.ui.NuvioScreen
 import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.core.ui.NuvioTokens
+import com.nuvio.app.core.ui.NuvioColorTokens
 import com.nuvio.app.core.ui.ScreenActivityEffect
 import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.features.livetv.data.LiveTvPreferences
@@ -110,6 +138,15 @@ import com.nuvio.app.features.livetv.sports.SportsLive
 import com.nuvio.app.features.livetv.sports.SportsRepository
 import com.nuvio.app.features.livetv.sports.GameState
 import com.nuvio.app.core.ui.NuvioBottomSheetActionRow
+import com.nuvio.app.features.addons.AddonRepository
+import com.nuvio.app.features.addons.ManagedAddon
+import com.nuvio.app.features.catalog.CatalogUiState
+import com.nuvio.app.features.catalog.fetchCatalogPage
+import com.nuvio.app.features.home.MetaPreview
+import com.nuvio.app.features.livetv.ui.addonscatalog.AddonCatalogScreen
+import com.nuvio.app.features.livetv.ui.quickchannels.QuickChannelList
+import com.nuvio.app.features.livetv.ui.quickchannels.QuickChannel
+import com.nuvio.app.features.livetv.ui.quickchannels.QuickStreamChecker
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -121,6 +158,15 @@ import nuvio.composeapp.generated.resources.livetv_guide
 import nuvio.composeapp.generated.resources.livetv_header_guide
 import nuvio.composeapp.generated.resources.livetv_header_search
 import nuvio.composeapp.generated.resources.livetv_header_settings
+import nuvio.composeapp.generated.resources.livetv_header_quick_channels
+import nuvio.composeapp.generated.resources.livetv_header_addons
+import nuvio.composeapp.generated.resources.livetv_quick_channels_section
+import nuvio.composeapp.generated.resources.livetv_quick_channels_open
+import nuvio.composeapp.generated.resources.livetv_no_matching_channels
+import nuvio.composeapp.generated.resources.livetv_addons_section
+import nuvio.composeapp.generated.resources.livetv_addons_open
+import nuvio.composeapp.generated.resources.livetv_no_addons_installed
+import nuvio.composeapp.generated.resources.livetv_remove_addon
 import nuvio.composeapp.generated.resources.livetv_no_results
 import nuvio.composeapp.generated.resources.livetv_on_demand
 import nuvio.composeapp.generated.resources.livetv_rec_record_now
@@ -141,6 +187,12 @@ import org.jetbrains.compose.resources.stringResource
  * The Live TV tab: channels grouped (favorites first), each with what's on now and how far
  * through it is. Tap plays; long-press opens the channel's options.
  */
+private data class CombinedSection(
+    val group: ChannelGroup,
+    val channels: List<LiveChannel>,
+    val isAddonsSection: Boolean,
+)
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LiveTvScreen(
@@ -159,6 +211,12 @@ fun LiveTvScreen(
     onOpenSports: () -> Unit = {},
     /** Opens Manage (reorder and show or hide groups and channels). */
     onOpenManage: () -> Unit = {},
+    /** Opens an add-on catalog. */
+    onOpenAddonCatalog: (manifestUrl: String, com.nuvio.app.features.addons.AddonCatalog) -> Unit = { _, _ -> },
+    /** Called when a catalog item (MetaPreview) is tapped inside an inline addon catalog. */
+    onCatalogItemClick: (MetaPreview) -> Unit = {},
+    /** Opens the add-on settings / manage screen. */
+    onOpenAddonSettings: () -> Unit = {},
 ) {
     val tokens = MaterialTheme.nuvio
     // Restore the open groups and the scroll position when coming back from the player.
@@ -171,6 +229,9 @@ fun LiveTvScreen(
     }
     val playlists by LiveTvPreferences.playlists.collectAsStateWithLifecycle()
     val savedPlaylist by PlaylistFilter.selected.collectAsStateWithLifecycle()
+    // Add-on state for playlist dropdown integration
+    val addonUiState by AddonRepository.uiState.collectAsStateWithLifecycle()
+    val addons = addonUiState.addons
     val hasOnDemand by OnDemandRepository.hasContent.collectAsStateWithLifecycle()
     val showOnDemand = hasOnDemand || playlists.any { it.enabled && it.importVod }
     val recordings by remember { LiveTvRecordingScheduler.start(); LiveTvRecorder.recordings }.collectAsStateWithLifecycle()
@@ -215,18 +276,34 @@ fun LiveTvScreen(
     }
 
     // Playlist dropdown: only playlists that have groups here; hidden with fewer than two.
-    val playlistChoices = remember(state.sections, playlists) {
-        playlists.mapNotNull { p ->
+    val playlistChoices = remember(state.sections, playlists, addons) {
+        val baseChoices = playlists.mapNotNull { p ->
             val n = state.sections.count { it.group.sourceId == p.id }
             if (n > 0) PlaylistChoice(p.id, p.name, if (n == 1) "1 group" else "$n groups") else null
         }
+        // Add addon entries as special playlist choices (prefixed with "addon:")
+        val addonChoices = addons.filter { it.manifest != null && it.manifest!!.catalogs.isNotEmpty() }.map { addon ->
+            val manifest = addon.manifest!!
+            PlaylistChoice("addon:${addon.manifestUrl}", manifest.name, "${manifest.catalogs.size} catalog${if (manifest.catalogs.size != 1) "s" else ""}")
+        }
+        baseChoices + addonChoices
     }
     val playlistId = PlaylistFilter.effective(savedPlaylist, playlistChoices.map { it.id })
-    val playlistNames = remember(playlists) { playlists.associate { it.id to it.name } }
+    // Check if selected playlist is an addon
+    val selectedAddonManifestUrl = playlistId?.takeIf { it.startsWith("addon:") }?.removePrefix("addon:")
+    val playlistNames = remember(playlists, addons) {
+        playlists.associate { it.id to it.name } + addons.associate { it.manifestUrl to (it.displayTitle) }
+    }
     val sections = remember(state.sections, playlistId) {
         if (playlistId == null) state.sections
-        else state.sections.filter { it.group.sourceId == null || it.group.sourceId == playlistId }
+        else if (playlistId.startsWith("addon:")) {
+            // When an addon is selected, show all sections (like "All playlists") but indicate addon is active
+            state.sections
+        } else {
+            state.sections.filter { it.group.sourceId == null || it.group.sourceId == playlistId }
+        }
     }
+
     val searchResults by remember(state.visible, query, playlistId) {
         derivedStateOf { LiveTvViewState.search(state.visible.filter { playlistId == null || it.sourceId == playlistId }, query) }
     }
@@ -261,6 +338,27 @@ fun LiveTvScreen(
             index += 1 + if (s.group.id in expanded.value) s.channels.size else 0
         }
         return null
+    }
+
+    // Build combined list structure: sections with addons inserted after "Recently watched"
+    val addonsKey = "addons"
+    val combinedSections = remember(sections) {
+        sections.map { section ->
+            CombinedSection(
+                group = section.group,
+                channels = section.channels,
+                isAddonsSection = false,
+            )
+        }.let { list ->
+            val recentIndex = list.indexOfFirst { it.group.id == ChannelGroup.RECENT }
+            if (recentIndex >= 0) {
+                list.subList(0, recentIndex + 1) +
+                listOf(CombinedSection(group = ChannelGroup("", "", 0), channels = emptyList(), isAddonsSection = true)) +
+                list.subList(recentIndex + 1, list.size)
+            } else {
+                list + listOf(CombinedSection(group = ChannelGroup("", "", 0), channels = emptyList(), isAddonsSection = true))
+            }
+        }
     }
 
     Box(modifier = modifier.fillMaxSize().liveTvSideInsets().onGloballyPositioned { boxTopPx = it.positionInRoot().y }) {
@@ -298,7 +396,20 @@ fun LiveTvScreen(
                         choices = playlistChoices,
                         selectedId = playlistId,
                         allDetail = (state.sections.count { it.group.sourceId != null }).let { if (it == 1) "1 group" else "$it groups" },
-                        onSelect = PlaylistFilter::select,
+                        onSelect = { id ->
+                            if (id != null && id.startsWith("addon:")) {
+                                // Open the addon catalog when an addon playlist is selected
+                                val manifestUrl = id.removePrefix("addon:")
+                                val addon = addons.find { it.manifestUrl == manifestUrl }
+                                if (addon != null && addon.manifest != null && addon.manifest!!.catalogs.isNotEmpty()) {
+                                    onOpenAddonCatalog(manifestUrl, addon.manifest!!.catalogs.first())
+                                } else {
+                                    PlaylistFilter.select(id)
+                                }
+                            } else {
+                                PlaylistFilter.select(id)
+                            }
+                        },
                         modifier = Modifier.padding(bottom = NuvioTokens.Space.s8),
                     )
                     AnimatedVisibility(visible = searching) {
@@ -354,28 +465,43 @@ fun LiveTvScreen(
                         }
                     }
                 }
-                sections.forEach { section ->
-                    val id = section.group.id
-                    val isCollapsed = id !in expanded.value
-                    item(key = "g:$id") {
-                        GroupCard(section.group, section.channels, isCollapsed, playlistTag = if (playlistId == null && playlistChoices.size > 1) playlistNames[section.group.sourceId] else null) {
-                            if (section.group.locked) unlockGroup = section.group
-                            else {
-                                expanded.value = if (isCollapsed) expanded.value + id else expanded.value - id
-                                LiveTvListMemory.expanded = expanded.value
+                // Inline Quick Channels section
+                item {
+                    QuickChannelsInlineSection(
+                        onPlayChannel = { ch -> onPlayChannel(ch, null) },
+                    )
+                }
+                combinedSections.forEachIndexed { index, combinedSection ->
+                    if (combinedSection.isAddonsSection) {
+                        item(key = addonsKey) {
+                            AddonsCatalogInlineSection(
+                                onOpenSettings = { onOpenAddonSettings() },
+                                onCatalogItemClick = onCatalogItemClick,
+                            )
+                        }
+                    } else {
+                        val section = combinedSection
+                        item(key = "g:${section.group.id}") {
+                            GroupCard(section.group, section.channels, section.group.id !in expanded.value, playlistTag = if (playlistId == null && playlistChoices.size > 1) playlistNames[section.group.sourceId] else null) {
+                                if (section.group.locked) unlockGroup = section.group
+                                else {
+                                    expanded.value = if (section.group.id !in expanded.value) expanded.value + section.group.id else expanded.value - section.group.id
+                                    LiveTvListMemory.expanded = expanded.value
+                                }
                             }
                         }
-                    }
-                    if (!isCollapsed) {
-                        items(section.channels.size, key = { "$id/" + section.channels[it].key }) { i ->
-                            val c = section.channels[i]
-                            ChannelRow(c, nowNext[c.key], now, c.key in state.favoriteKeys, onClick = {
-                                LiveTvListMemory.expanded = expanded.value + id
-                                LiveTvListMemory.saveScroll(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
-                                onPlayChannel(c, nowNext[c.key]?.now?.title)
-                            }, onLongClick = {
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress); sheetChannel = c
-                            }, modifier = Modifier.padding(start = NuvioTokens.Space.s12))
+                        val isCollapsed = section.group.id !in expanded.value
+                        if (!isCollapsed) {
+                            items(section.channels.size, key = { "${section.group.id}/" + section.channels[it].key }) { i ->
+                                val c = section.channels[i]
+                                ChannelRow(c, nowNext[c.key], now, c.key in state.favoriteKeys, onClick = {
+                                    LiveTvListMemory.expanded = expanded.value + section.group.id
+                                    LiveTvListMemory.saveScroll(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+                                    onPlayChannel(c, nowNext[c.key]?.now?.title)
+                                }, onLongClick = {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress); sheetChannel = c
+                                }, modifier = Modifier.padding(start = NuvioTokens.Space.s12))
+                            }
                         }
                     }
                 }
@@ -433,6 +559,847 @@ fun LiveTvScreen(
         ManualRecordingDialog(channel = channel, scheduleOnly = scheduleOnly, onDismiss = { manualRecording = null })
     }
     unlockGroup?.let { g -> UnlockGroupDialog(g.id, g.title, onDismiss = { unlockGroup = null }) }
+
+
+}
+
+/** Full Quick Channels section shown inline. */
+@Composable
+private fun QuickChannelsInlineSection(
+    onPlayChannel: (com.nuvio.app.features.livetv.model.LiveChannel) -> Unit,
+) {
+    val tokens = MaterialTheme.nuvio.colors
+    val liveChannels by com.nuvio.app.features.livetv.data.LiveTvRepository.channels.collectAsStateWithLifecycle(initialValue = emptyList())
+    val categories = QuickChannelList.getChannelCategories()
+    var selectedCategory by remember { mutableStateOf(categories.firstOrNull() ?: "all") }
+    val filteredQc = remember(selectedCategory) {
+        QuickChannelList.getChannelsForCategory(selectedCategory)
+    }
+    var selectedQc by remember { mutableStateOf<QuickChannel?>(null) }
+    var matches by remember { mutableStateOf<List<com.nuvio.app.features.livetv.model.LiveChannel>>(emptyList()) }
+    var aliveByUrl by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
+    val checked = remember(aliveByUrl) { aliveByUrl.values.count { it } }
+    val unchecked = remember(aliveByUrl) { aliveByUrl.count { it.value == null } }
+    val checking = unchecked > 0
+
+    // Custom region/channel management state
+    var showAddRegionDialog by remember { mutableStateOf(false) }
+    var showAddChannelDialog by remember { mutableStateOf(false) }
+    var showEditRegionDialog by remember { mutableStateOf(false) }
+    var showEditChannelDialog by remember { mutableStateOf(false) }
+    var editingRegion by remember { mutableStateOf<QuickChannelList.QuickCategory?>(null) }
+    var editingChannel by remember { mutableStateOf<QuickChannel?>(null) }
+    var newRegionId by remember { mutableStateOf("") }
+    var newRegionTitle by remember { mutableStateOf("") }
+    var newRegionDescription by remember { mutableStateOf("") }
+    var newRegionTags by remember { mutableStateOf("") }
+    var newChannelName by remember { mutableStateOf("") }
+    var newChannelAliases by remember { mutableStateOf("") }
+    var newChannelRegions by remember { mutableStateOf("") }
+    var newChannelTags by remember { mutableStateOf("") }
+
+    LaunchedEffect(selectedQc) {
+        if (selectedQc != null) {
+            aliveByUrl = emptyMap()
+            val q = selectedQc!!
+            matches = liveChannels.filter { QuickChannelList.matches(q, it) }
+            if (matches.isNotEmpty()) {
+                val statuses = QuickStreamChecker.checkBatch(matches.map { it.url })
+                aliveByUrl = statuses
+            }
+        } else {
+            matches = emptyList()
+            aliveByUrl = emptyMap()
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = NuvioTokens.Space.s12),
+    ) {
+        // Section header
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = NuvioTokens.Space.s12, vertical = NuvioTokens.Space.s8),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Filled.Tv,
+                contentDescription = null,
+                tint = tokens.accent,
+                modifier = Modifier.size(NuvioTokens.Space.s20),
+            )
+            Spacer(Modifier.width(NuvioTokens.Space.s8))
+            Text(
+                stringResource(Res.string.livetv_quick_channels_section),
+                style = MaterialTheme.typography.titleSmall,
+                color = tokens.textPrimary,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            // Add custom region button
+            IconButton(onClick = { showAddRegionDialog = true }) {
+                Icon(Icons.Default.Add, contentDescription = "Add Region", tint = tokens.accent)
+            }
+            // Add custom channel button
+            IconButton(onClick = { showAddChannelDialog = true }) {
+                Icon(Icons.Default.Add, contentDescription = "Add Channel", tint = tokens.accent)
+            }
+        }
+
+        // Category row
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s6),
+            contentPadding = PaddingValues(horizontal = NuvioTokens.Space.s12, vertical = NuvioTokens.Space.s4),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            items(categories) { catId ->
+                val cat = QuickChannelList.allCategories().find { it.id == catId }
+                val title = cat?.title ?: catId
+                val isCustom = cat?.let { QuickChannelList.isCustomCategory(it.id) } ?: false
+                val isActive = catId == selectedCategory
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(if (isActive) tokens.accent else tokens.surfaceCard)
+                        .clickable { selectedCategory = catId }
+                        .padding(horizontal = NuvioTokens.Space.s10, vertical = NuvioTokens.Space.s4),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            title,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (isActive) Color.White else tokens.textPrimary,
+                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                        )
+                        if (isCustom) {
+                            IconButton(onClick = { QuickChannelList.removeCustomCategory(catId); if (selectedCategory == catId) selectedCategory = "all" }, modifier = Modifier.size(18.dp)) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = if (isActive) Color.White else tokens.textMuted, modifier = Modifier.size(14.dp))
+                            }
+                            IconButton(onClick = { editingRegion = QuickChannelList.allCategories().find { it.id == catId }; showEditRegionDialog = true }, modifier = Modifier.size(18.dp)) {
+                                Icon(Icons.Default.Edit, contentDescription = "Edit", tint = if (isActive) Color.White else tokens.textMuted, modifier = Modifier.size(14.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Quick channel chip row
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s6),
+            contentPadding = PaddingValues(horizontal = NuvioTokens.Space.s12, vertical = NuvioTokens.Space.s6),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            items(filteredQc, key = { it.displayName }) { qc ->
+                val isCustom = QuickChannelList.isCustomChannel(qc.displayName)
+                Box(
+                    modifier = Modifier
+                        .width(150.dp)
+                        .height(92.dp)
+                        .clip(RoundedCornerShape(NuvioTokens.Radius.md))
+                        .background(if (selectedQc?.displayName == qc.displayName) tokens.accent.copy(alpha = 0.2f) else tokens.surfaceCard)
+                        .clickable {
+                            matches = emptyList()
+                            aliveByUrl = emptyMap()
+                            selectedQc = qc
+                        }
+                        .padding(horizontal = NuvioTokens.Space.s10, vertical = NuvioTokens.Space.s10),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            qc.displayName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (selectedQc?.displayName == qc.displayName) tokens.accent else tokens.textPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (isCustom) {
+                                IconButton(onClick = { editingChannel = qc; showEditChannelDialog = true }, modifier = Modifier.size(22.dp)) {
+                                    Icon(Icons.Default.Edit, contentDescription = "Edit", tint = tokens.textMuted, modifier = Modifier.size(16.dp))
+                                }
+                                IconButton(onClick = { QuickChannelList.removeCustomChannel(qc.displayName); if (selectedQc?.displayName == qc.displayName) selectedQc = null }, modifier = Modifier.size(22.dp)) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = tokens.textMuted, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Match list - scrollable popup
+        if (selectedQc != null && matches.isNotEmpty()) {
+            Spacer(Modifier.height(NuvioTokens.Space.s6))
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = NuvioTokens.Space.s12),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    selectedQc!!.displayName,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = tokens.textPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                )
+                if (checking) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        color = tokens.accent,
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(Modifier.width(6.dp))
+                }
+                // Show only working streams count
+                Text(
+                    "$checked working",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = tokens.textMuted,
+                )
+            }
+            Spacer(Modifier.height(NuvioTokens.Space.s8))
+            // Sort: working (true) first, then null (checking), then false (not working - hidden)
+            val sortedMatches = matches.sortedWith(
+                compareByDescending<com.nuvio.app.features.livetv.model.LiveChannel> { ch -> aliveByUrl[ch.url] == true }
+                    .thenByDescending { ch -> aliveByUrl[ch.url] == null }
+            ).filter { ch -> aliveByUrl[ch.url] != false } // Hide non-working streams
+
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s6),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 240.dp)
+                    .padding(horizontal = NuvioTokens.Space.s12),
+            ) {
+                items(sortedMatches, key = { it.key }) { ch ->
+                    val isAlive = aliveByUrl[ch.url]
+                    QuickChannelInlineRow(channel = ch, isAlive = isAlive, onClick = { onPlayChannel(ch) })
+                }
+            }
+        } else if (selectedQc != null && matches.isEmpty() && aliveByUrl.isNotEmpty()) {
+            Spacer(Modifier.height(NuvioTokens.Space.s12))
+            Text(
+                stringResource(Res.string.livetv_no_matching_channels),
+                style = MaterialTheme.typography.bodySmall,
+                color = tokens.textMuted,
+                modifier = Modifier.padding(horizontal = NuvioTokens.Space.s12),
+            )
+        }
+    }
+
+    // Add Custom Region Dialog
+    if (showAddRegionDialog) {
+        AddRegionDialog(
+            onDismiss = { showAddRegionDialog = false },
+            onAdd = { id, title, description, tags ->
+                val category = QuickChannelList.QuickCategory(
+                    id = id.trim().lowercase().replace(" ", "-"),
+                    title = title.trim(),
+                    description = description.trim(),
+                    tags = tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                )
+                QuickChannelList.addCustomCategory(category)
+                showAddRegionDialog = false
+            },
+        )
+    }
+
+    // Add Custom Channel Dialog
+    if (showAddChannelDialog) {
+        AddChannelDialog(
+            onDismiss = { showAddChannelDialog = false },
+            onAdd = { name, aliases, regions, tags ->
+                val channel = QuickChannel(
+                    displayName = name.trim(),
+                    aliases = aliases.split(",").map { it.trim() }.filter { it.isNotBlank() },
+                    regions = regions.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() },
+                    tags = tags.split(",").map { it.trim().lowercase() }.filter { it.isNotBlank() }
+                )
+                QuickChannelList.addCustomChannel(channel)
+                showAddChannelDialog = false
+            },
+        )
+    }
+
+    // Edit Custom Region Dialog
+    if (showEditRegionDialog && editingRegion != null) {
+        val region = editingRegion!!
+        EditRegionDialog(
+            region = region,
+            onDismiss = { showEditRegionDialog = false; editingRegion = null },
+            onEdit = { id, title, description, tags ->
+                val category = QuickChannelList.QuickCategory(
+                    id = id.trim().lowercase().replace(" ", "-"),
+                    title = title.trim(),
+                    description = description.trim(),
+                    tags = tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                )
+                QuickChannelList.updateCustomCategory(region.id, category)
+                showEditRegionDialog = false
+                editingRegion = null
+            },
+        )
+    }
+
+    // Edit Custom Channel Dialog
+    if (showEditChannelDialog && editingChannel != null) {
+        val channel = editingChannel!!
+        EditChannelDialog(
+            channel = channel,
+            onDismiss = { showEditChannelDialog = false; editingChannel = null },
+            onEdit = { name, aliases, regions, tags ->
+                val updated = QuickChannel(
+                    displayName = name.trim(),
+                    aliases = aliases.split(",").map { it.trim() }.filter { it.isNotBlank() },
+                    regions = regions.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() },
+                    tags = tags.split(",").map { it.trim().lowercase() }.filter { it.isNotBlank() }
+                )
+                QuickChannelList.updateCustomChannel(channel.displayName, updated)
+                showEditChannelDialog = false
+                editingChannel = null
+            },
+        )
+    }
+}
+
+@Composable
+private fun QuickChannelInlineRow(
+    channel: com.nuvio.app.features.livetv.model.LiveChannel,
+    isAlive: Boolean?,
+    onClick: () -> Unit,
+) {
+    val tokens = MaterialTheme.nuvio.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(NuvioTokens.Radius.md))
+            .background(tokens.surfaceCard)
+            .clickable(onClick = onClick)
+            .padding(horizontal = NuvioTokens.Space.s10, vertical = NuvioTokens.Space.s8),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val image = channel.thumbnail?.takeIf { it.isNotBlank() } ?: channel.logo?.takeIf { it.isNotBlank() }
+        if (image != null) {
+            AsyncImage(
+                model = image,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(NuvioTokens.Radius.xs))
+                    .background(tokens.background),
+            )
+            Spacer(Modifier.width(NuvioTokens.Space.s8))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                channel.name,
+                style = MaterialTheme.typography.bodyMedium,
+                color = tokens.textPrimary,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (channel.group.isNotEmpty()) {
+                Text(
+                    channel.group,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = tokens.textMuted,
+                    maxLines = 1,
+                )
+            }
+        }
+        val aliveText = when (isAlive) {
+            true -> "✓ Live"
+            null -> "…"
+            false -> "▶"
+        }
+        val aliveColor = when (isAlive) {
+            true -> Color(0xFF4CAF50)
+            null -> tokens.textMuted
+            false -> tokens.accent
+        }
+        Text(
+            aliveText,
+            style = MaterialTheme.typography.labelSmall,
+            color = aliveColor,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+// ─── Addons inline section: each addon is a collapsible card, catalog items appear below ───
+
+/** Inline addon section rendered as expandable cards, matching the group/channel list style. */
+@Composable
+private fun AddonsCatalogInlineSection(
+    onOpenSettings: () -> Unit,
+    onCatalogItemClick: (MetaPreview) -> Unit,
+) {
+    val tokens = MaterialTheme.nuvio.colors
+    // Lazy-load addons only when this section enters the composition (user scrolls here).
+    // This prevents crashes caused by premature addon initialization during app startup.
+    LaunchedEffect(Unit) {
+        runCatching { AddonRepository.initialize() }
+    }
+
+    val uiState by AddonRepository.uiState.collectAsStateWithLifecycle()
+    val addons = uiState.addons
+
+    Column(verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s4)) {
+        if (addons.isEmpty()) {
+            AddonEmptyStateCard(tokens = tokens)
+        } else {
+            // Keep expanded state for each addon keyed by manifest URL
+            val expandedAddons = remember { mutableStateMapOf<String, Boolean>() }
+            // Keep expanded state for each catalog keyed by "manifestUrl:catalogId"
+            val expandedCatalogs = remember { mutableStateMapOf<String, Boolean>() }
+
+            addons.forEach { addon ->
+                val manifest = addon.manifest
+                if (manifest != null && manifest.catalogs.isNotEmpty()) {
+                    val addonKey = addon.manifestUrl
+                    val isExpanded = expandedAddons.getOrPut(addonKey) { false }
+
+                    AddonCard(
+                        addon = addon,
+                        expanded = isExpanded,
+                        onToggle = { expandedAddons[addonKey] = !isExpanded },
+                    )
+
+                    if (isExpanded) {
+                        manifest.catalogs.forEach { catalog ->
+                            val catalogKey = "$addonKey:${catalog.id}"
+                            val isCatExpanded = expandedCatalogs.getOrPut(catalogKey) { false }
+
+                            ExpandableCatalogSection(
+                                manifestUrl = addon.manifestUrl,
+                                catalog = catalog,
+                                addonName = manifest.name,
+                                expanded = isCatExpanded,
+                                onToggle = { expandedCatalogs[catalogKey] = !isCatExpanded },
+                                onCatalogItemClick = onCatalogItemClick,
+                            )
+                        }
+                    }
+                } else {
+                    // Addon with no manifest or no catalogs — show as disabled card
+                    AddonEmptyCatalogCard(addon = addon, tokens = tokens)
+                }
+            }
+        }
+    }
+}
+
+// ─── Addon card (like GroupCard) ───────────────────────────────────────────────────────────
+
+@Composable
+private fun AddonCard(
+    addon: com.nuvio.app.features.addons.ManagedAddon,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val tokens = MaterialTheme.nuvio.colors
+    val arrow by animateFloatAsState(if (expanded) 180f else 0f)
+    val manifest = addon.manifest
+    val catalogCount = manifest?.catalogs?.size ?: 0
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(NuvioTokens.Radius.xl))
+            .background(tokens.surface)
+            .clickable(enabled = catalogCount > 0) { onToggle() }
+            .padding(NuvioTokens.Space.s12),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s12),
+    ) {
+        // Icon box
+        if (manifest != null && !manifest.logoUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = manifest.logoUrl,
+                contentDescription = null,
+                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(NuvioTokens.Radius.lg)),
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(NuvioTokens.Radius.lg))
+                    .background(tokens.accent.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.Extension,
+                    contentDescription = null,
+                    tint = tokens.accent,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        }
+
+        // Title + subtitle
+        Column(verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s4)) {
+            Text(
+                text = addon.displayTitle,
+                style = MaterialTheme.typography.titleMedium,
+                color = tokens.textPrimary,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            when {
+                manifest == null && addon.isRefreshing -> {
+                    Text("Loading…", style = MaterialTheme.typography.labelMedium, color = tokens.textMuted)
+                }
+                manifest == null && addon.errorMessage != null -> {
+                    Text(addon.errorMessage!!, style = MaterialTheme.typography.labelMedium, color = tokens.danger)
+                }
+                catalogCount > 0 -> {
+                    Text(
+                        "$catalogCount catalog${if (catalogCount > 1) "s" else ""}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = tokens.textMuted,
+                    )
+                }
+                else -> {
+                    Text("No catalogs", style = MaterialTheme.typography.labelMedium, color = tokens.textMuted)
+                }
+            }
+        }
+
+        // Expand arrow
+        if (catalogCount > 0) {
+            Icon(
+                Icons.Filled.ExpandMore,
+                contentDescription = null,
+                tint = tokens.textMuted,
+                modifier = Modifier.rotate(arrow),
+            )
+        }
+    }
+}
+
+// ─── Disabled addon card (no manifest/catalogs) ────────────────────────────────────────────
+
+@Composable
+private fun AddonEmptyCatalogCard(
+    addon: com.nuvio.app.features.addons.ManagedAddon,
+    tokens: com.nuvio.app.core.ui.NuvioColorTokens,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(NuvioTokens.Radius.xl))
+            .background(tokens.surface)
+            .padding(NuvioTokens.Space.s12),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s12),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(NuvioTokens.Radius.lg))
+                .background(tokens.surfaceCard),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.Extension,
+                contentDescription = null,
+                tint = tokens.textMuted,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s4)) {
+            Text(
+                addon.displayTitle,
+                style = MaterialTheme.typography.titleMedium,
+                color = tokens.textMuted,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                if (addon.manifest == null && addon.isRefreshing) "Loading…"
+                else "No catalogs available",
+                style = MaterialTheme.typography.labelMedium,
+                color = tokens.textMuted,
+            )
+        }
+    }
+}
+
+// ─── Catalog card (indented sub-card) ──────────────────────────────────────────────────────
+
+@Composable
+private fun CatalogCard(
+    catalog: com.nuvio.app.features.addons.AddonCatalog,
+    addonName: String,
+    expanded: Boolean,
+    isLoading: Boolean,
+    errorMessage: String?,
+    itemCount: Int,
+    onToggle: () -> Unit,
+) {
+    val tokens = MaterialTheme.nuvio.colors
+    val arrow by animateFloatAsState(if (expanded) 180f else 0f)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = NuvioTokens.Space.s48)
+            .clip(RoundedCornerShape(NuvioTokens.Radius.md))
+            .background(tokens.surface)
+            .clickable { onToggle() }
+            .padding(horizontal = NuvioTokens.Space.s12, vertical = NuvioTokens.Space.s10),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Icon(
+            Icons.Filled.MenuBook,
+            contentDescription = null,
+            tint = tokens.accent,
+            modifier = Modifier.size(NuvioTokens.Icon.md),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = catalog.name,
+                style = MaterialTheme.typography.bodyLarge,
+                color = tokens.textPrimary,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = "$addonName  ·  ${catalog.type}",
+                style = MaterialTheme.typography.labelSmall,
+                color = tokens.textMuted,
+            )
+        }
+        if (!isLoading && errorMessage == null) {
+            Text(
+                "$itemCount",
+                style = MaterialTheme.typography.labelMedium,
+                color = tokens.textMuted,
+                modifier = Modifier.clip(RoundedCornerShape(NuvioTokens.Radius.xs)).background(tokens.surface),
+            )
+        }
+        Icon(
+            Icons.Filled.ExpandMore,
+            contentDescription = null,
+            tint = tokens.textMuted,
+            modifier = Modifier.rotate(arrow),
+        )
+    }
+}
+
+// ─── Expandable catalog section with isolated state ──────────────────────────────────────────
+@Composable
+private fun ExpandableCatalogSection(
+    manifestUrl: String,
+    catalog: com.nuvio.app.features.addons.AddonCatalog,
+    addonName: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onCatalogItemClick: (MetaPreview) -> Unit,
+) {
+    val catalogState = remember { mutableStateOf(CatalogUiState()) }
+
+    LaunchedEffect(expanded, manifestUrl, catalog.id, catalog.type) {
+        if (!expanded) {
+            catalogState.value = CatalogUiState()
+            return@LaunchedEffect
+        }
+        try {
+            val page = fetchCatalogPage(
+                manifestUrl = manifestUrl,
+                type = catalog.type,
+                catalogId = catalog.id,
+            )
+            catalogState.value = CatalogUiState(
+                items = page.items,
+                isLoading = false,
+                nextSkip = page.nextSkip,
+            )
+        } catch (e: Exception) {
+            catalogState.value = CatalogUiState(
+                items = emptyList(),
+                isLoading = false,
+                errorMessage = e.message,
+            )
+        }
+    }
+
+    val isLoading = catalogState.value.isLoading && catalogState.value.items.isEmpty()
+
+    CatalogCard(
+        catalog = catalog,
+        addonName = addonName,
+        expanded = expanded,
+        isLoading = isLoading,
+        errorMessage = catalogState.value.errorMessage,
+        itemCount = catalogState.value.items.size,
+        onToggle = onToggle,
+    )
+
+    if (expanded) {
+        CatalogItemsRow(
+            uiState = catalogState.value,
+            onCatalogItemClick = onCatalogItemClick,
+        )
+    }
+}
+
+// ─── Catalog items row (indented grid, like channel rows) ──────────────────────────────────
+
+@Composable
+private fun CatalogItemsRow(
+    uiState: CatalogUiState,
+    onCatalogItemClick: (MetaPreview) -> Unit,
+) {
+    val tokens = MaterialTheme.nuvio.colors
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = NuvioTokens.Space.s48 + NuvioTokens.Space.s12, end = NuvioTokens.Space.s12, top = NuvioTokens.Space.s4, bottom = NuvioTokens.Space.s8),
+    ) {
+        if (uiState.isLoading && uiState.items.isEmpty()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8),
+            ) {
+                NuvioLoadingIndicator(size = NuvioTokens.Space.s16)
+                Text("Loading…", style = MaterialTheme.typography.bodySmall, color = tokens.textMuted)
+            }
+        } else if (uiState.errorMessage != null) {
+            Text(
+                uiState.errorMessage!!,
+                style = MaterialTheme.typography.bodySmall,
+                color = tokens.danger,
+            )
+        } else if (uiState.items.isEmpty()) {
+            Text(
+                "No items",
+                style = MaterialTheme.typography.bodySmall,
+                color = tokens.textMuted,
+            )
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8),
+                verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8),
+            ) {
+                items(uiState.items.size, key = { i -> i.toString() }) { i ->
+                    CatalogItemTile(
+                        item = uiState.items[i],
+                        tokens = tokens,
+                        onClick = { onCatalogItemClick(uiState.items[i]) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ─── Catalog poster tile ───────────────────────────────────────────────────────────────────
+
+@Composable
+private fun CatalogItemTile(
+    item: MetaPreview,
+    tokens: com.nuvio.app.core.ui.NuvioColorTokens,
+    onClick: () -> Unit,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.67f)
+                .clip(RoundedCornerShape(NuvioTokens.Radius.xs))
+                .background(tokens.surfaceCard)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (!item.poster.isNullOrBlank()) {
+                AsyncImage(
+                    model = item.poster,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Icon(
+                    Icons.Filled.PlayArrow,
+                    contentDescription = null,
+                    tint = tokens.textMuted,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+        }
+        Text(
+            text = item.name,
+            style = MaterialTheme.typography.labelSmall,
+            color = tokens.textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth().padding(top = NuvioTokens.Space.s4),
+        )
+    }
+}
+
+// ─── Empty state card ──────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun AddonEmptyStateCard(tokens: com.nuvio.app.core.ui.NuvioColorTokens) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(NuvioTokens.Radius.xl))
+            .background(tokens.surface)
+            .padding(NuvioTokens.Space.s12),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s12),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(NuvioTokens.Radius.lg))
+                .background(tokens.surfaceCard),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.Extension,
+                contentDescription = null,
+                tint = tokens.textMuted,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s4)) {
+            Text(
+                stringResource(Res.string.livetv_addons_section),
+                style = MaterialTheme.typography.titleMedium,
+                color = tokens.textPrimary,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                stringResource(Res.string.livetv_no_addons_installed),
+                style = MaterialTheme.typography.labelMedium,
+                color = tokens.textMuted,
+            )
+        }
+    }
 }
 
 @Composable
@@ -755,10 +1722,10 @@ internal fun ChannelLogo(
             .background(tokens.colors.surfaceCard),
         contentAlignment = Alignment.Center,
     ) {
-        val logo = channel.logo?.takeIf { show && it.isNotBlank() }
-        if (logo != null) {
+        val image = channel.thumbnail?.takeIf { show && it.isNotBlank() } ?: channel.logo?.takeIf { show && it.isNotBlank() }
+        if (image != null) {
             AsyncImage(
-                model = logo,
+                model = image,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize().padding(inset),
                 contentScale = ContentScale.Fit,
@@ -828,4 +1795,251 @@ private fun HeaderButton(a: HeaderAction, modifier: Modifier = Modifier) {
         Icon(if (a.showClose) Icons.Rounded.Close else a.icon, contentDescription = a.label, tint = a.tint, modifier = Modifier.size(24.dp))
         Text(a.short, style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp), color = if (a.tint == tokens.colors.textPrimary) tokens.colors.textSecondary else a.tint, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip)
     }
+}
+
+/** Dialog for adding a custom quick channel region. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddRegionDialog(
+    onDismiss: () -> Unit,
+    onAdd: (String, String, String, String) -> Unit,
+) {
+    RegionDialogImpl("Add Custom Region", "", "", "", "", "Add", onDismiss, onAdd)
+}
+
+/** Dialog for editing an existing custom region. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EditRegionDialog(
+    region: QuickChannelList.QuickCategory,
+    onDismiss: () -> Unit,
+    onEdit: (String, String, String, String) -> Unit,
+) {
+    RegionDialogImpl("Edit Region", region.id, region.title, region.description, region.tags.joinToString(","), "Save", onDismiss, onEdit)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RegionDialogImpl(
+    title: String,
+    initialId: String,
+    initialTitle: String,
+    initialDescription: String,
+    initialTags: String,
+    confirmText: String,
+    onDismiss: () -> Unit,
+    onSubmit: (String, String, String, String) -> Unit,
+) {
+    val tokens = MaterialTheme.nuvio.colors
+    var regionId by remember { mutableStateOf(initialId) }
+    var regionTitle by remember { mutableStateOf(initialTitle) }
+    var regionDescription by remember { mutableStateOf(initialDescription) }
+    var regionTags by remember { mutableStateOf(initialTags) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, style = MaterialTheme.typography.titleMedium, color = tokens.textPrimary) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                OutlinedTextField(
+                    value = regionId,
+                    onValueChange = { regionId = it },
+                    label = { Text("Region ID (e.g., my-region)", color = tokens.textMuted) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = tokens.surfaceCard,
+                        unfocusedContainerColor = tokens.surfaceCard,
+                        focusedBorderColor = tokens.accent,
+                        unfocusedBorderColor = tokens.textMuted.copy(alpha = 0.4f),
+                        focusedLabelColor = tokens.accent,
+                        unfocusedLabelColor = tokens.textMuted,
+                        cursorColor = tokens.accent,
+                    ),
+                )
+                OutlinedTextField(
+                    value = regionTitle,
+                    onValueChange = { regionTitle = it },
+                    label = { Text("Display Title (e.g., My Region)", color = tokens.textMuted) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = tokens.surfaceCard,
+                        unfocusedContainerColor = tokens.surfaceCard,
+                        focusedBorderColor = tokens.accent,
+                        unfocusedBorderColor = tokens.textMuted.copy(alpha = 0.4f),
+                        focusedLabelColor = tokens.accent,
+                        unfocusedLabelColor = tokens.textMuted,
+                        cursorColor = tokens.accent,
+                    ),
+                )
+                OutlinedTextField(
+                    value = regionDescription,
+                    onValueChange = { regionDescription = it },
+                    label = { Text("Description (optional)", color = tokens.textMuted) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = tokens.surfaceCard,
+                        unfocusedContainerColor = tokens.surfaceCard,
+                        focusedBorderColor = tokens.accent,
+                        unfocusedBorderColor = tokens.textMuted.copy(alpha = 0.4f),
+                        focusedLabelColor = tokens.accent,
+                        unfocusedLabelColor = tokens.textMuted,
+                        cursorColor = tokens.accent,
+                    ),
+                )
+                OutlinedTextField(
+                    value = regionTags,
+                    onValueChange = { regionTags = it },
+                    label = { Text("Tags (comma-separated, e.g., sports,news)", color = tokens.textMuted) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = tokens.surfaceCard,
+                        unfocusedContainerColor = tokens.surfaceCard,
+                        focusedBorderColor = tokens.accent,
+                        unfocusedBorderColor = tokens.textMuted.copy(alpha = 0.4f),
+                        focusedLabelColor = tokens.accent,
+                        unfocusedLabelColor = tokens.textMuted,
+                        cursorColor = tokens.accent,
+                    ),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSubmit(regionId, regionTitle, regionDescription, regionTags) }) {
+                Text(confirmText, color = tokens.accent)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = tokens.textSecondary)
+            }
+        },
+    )
+}
+
+/** Dialog for adding a custom quick channel. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddChannelDialog(
+    onDismiss: () -> Unit,
+    onAdd: (String, String, String, String) -> Unit,
+) {
+    ChannelDialogImpl("Add Custom Quick Channel", "", "", "", "", "Add", onDismiss, onAdd)
+}
+
+/** Dialog for editing an existing custom quick channel. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EditChannelDialog(
+    channel: QuickChannel,
+    onDismiss: () -> Unit,
+    onEdit: (String, String, String, String) -> Unit,
+) {
+    ChannelDialogImpl(
+        "Edit Quick Channel",
+        channel.displayName,
+        channel.aliases.joinToString(","),
+        channel.regions.joinToString(","),
+        channel.tags.joinToString(","),
+        "Save",
+        onDismiss,
+        onEdit,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChannelDialogImpl(
+    title: String,
+    initialName: String,
+    initialAliases: String,
+    initialRegions: String,
+    initialTags: String,
+    confirmText: String,
+    onDismiss: () -> Unit,
+    onSubmit: (String, String, String, String) -> Unit,
+) {
+    val tokens = MaterialTheme.nuvio.colors
+    var channelName by remember { mutableStateOf(initialName) }
+    var channelAliases by remember { mutableStateOf(initialAliases) }
+    var channelRegions by remember { mutableStateOf(initialRegions) }
+    var channelTags by remember { mutableStateOf(initialTags) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, style = MaterialTheme.typography.titleMedium, color = tokens.textPrimary) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                OutlinedTextField(
+                    value = channelName,
+                    onValueChange = { channelName = it },
+                    label = { Text("Channel Name (e.g., My Channel)", color = tokens.textMuted) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = tokens.surfaceCard,
+                        unfocusedContainerColor = tokens.surfaceCard,
+                        focusedBorderColor = tokens.accent,
+                        unfocusedBorderColor = tokens.textMuted.copy(alpha = 0.4f),
+                        focusedLabelColor = tokens.accent,
+                        unfocusedLabelColor = tokens.textMuted,
+                        cursorColor = tokens.accent,
+                    ),
+                )
+                OutlinedTextField(
+                    value = channelAliases,
+                    onValueChange = { channelAliases = it },
+                    label = { Text("Aliases (comma-separated)", color = tokens.textMuted) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = tokens.surfaceCard,
+                        unfocusedContainerColor = tokens.surfaceCard,
+                        focusedBorderColor = tokens.accent,
+                        unfocusedBorderColor = tokens.textMuted.copy(alpha = 0.4f),
+                        focusedLabelColor = tokens.accent,
+                        unfocusedLabelColor = tokens.textMuted,
+                        cursorColor = tokens.accent,
+                    ),
+                )
+                OutlinedTextField(
+                    value = channelRegions,
+                    onValueChange = { channelRegions = it },
+                    label = { Text("Regions (comma-separated: US, UK, CA, etc.)", color = tokens.textMuted) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = tokens.surfaceCard,
+                        unfocusedContainerColor = tokens.surfaceCard,
+                        focusedBorderColor = tokens.accent,
+                        unfocusedBorderColor = tokens.textMuted.copy(alpha = 0.4f),
+                        focusedLabelColor = tokens.accent,
+                        unfocusedLabelColor = tokens.textMuted,
+                        cursorColor = tokens.accent,
+                    ),
+                )
+                OutlinedTextField(
+                    value = channelTags,
+                    onValueChange = { channelTags = it },
+                    label = { Text("Tags (comma-separated: sports, news, premium, etc.)", color = tokens.textMuted) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = tokens.surfaceCard,
+                        unfocusedContainerColor = tokens.surfaceCard,
+                        focusedBorderColor = tokens.accent,
+                        unfocusedBorderColor = tokens.textMuted.copy(alpha = 0.4f),
+                        focusedLabelColor = tokens.accent,
+                        unfocusedLabelColor = tokens.textMuted,
+                        cursorColor = tokens.accent,
+                    ),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSubmit(channelName, channelAliases, channelRegions, channelTags) }) {
+                Text(confirmText, color = tokens.accent)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = tokens.textSecondary)
+            }
+        },
+    )
 }

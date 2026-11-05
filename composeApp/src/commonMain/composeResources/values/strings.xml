@@ -2567,6 +2567,15 @@
     <string name="livetv_header_search">Search</string>
     <string name="livetv_header_guide">Guide</string>
     <string name="livetv_header_settings">Settings</string>
+    <string name="livetv_header_quick_channels">Quick Channels</string>
+    <string name="livetv_header_addons">Add-ons</string>
+    <string name="livetv_quick_channels_open">Open Quick Channels</string>
+    <string name="livetv_addons_open">Open Add-ons Browser</string>
+    <string name="livetv_quick_channels_section">Quick Channels</string>
+    <string name="livetv_addons_section">Add-ons Catalog</string>
+    <string name="livetv_remove_addon">Remove Add-on</string>
+    <string name="livetv_no_matching_channels">No matching channels</string>
+    <string name="livetv_no_addons_installed">No add-ons installed</string>
     <string name="livetv_settings">Live TV settings</string>
     <string name="livetv_search_hint">Search channels</string>
     <string name="livetv_no_results">No channels found</string>

@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Groups
@@ -117,6 +118,7 @@ internal fun PlayerControlsShell(
     onSubtitleClick: () -> Unit,
     onAudioClick: () -> Unit,
     onVideoSettingsClick: (() -> Unit)? = null,
+    onQuickChannelsClick: (() -> Unit)? = null,
     onSourcesClick: (() -> Unit)? = null,
     onEpisodesClick: (() -> Unit)? = null,
     chapters: List<PlayerChapter> = emptyList(),
@@ -168,6 +170,7 @@ internal fun PlayerControlsShell(
             onSpeedClick = onSpeedClick,
             onResizeModeClick = onResizeModeClick,
             onVideoSettingsClick = onVideoSettingsClick,
+            onQuickChannelsClick = onQuickChannelsClick,
             onOpenInExternalPlayer = onOpenInExternalPlayer,
             onStreamInfoClick = onStreamInfoClick,
             onSubmitIntroClick = onSubmitIntroClick,
@@ -240,6 +243,7 @@ internal fun PlayerControlsShell(
                     onParentalGuideAnimationComplete = onParentalGuideAnimationComplete,
                     onLockToggle = onLockToggle,
                     onVideoSettingsClick = onVideoSettingsClick,
+                    onQuickChannelsClick = onQuickChannelsClick,
                     onOpenInExternalPlayer = onOpenInExternalPlayer,
                     onPartyClick = onPartyClick,
                     partyActive = partyActive,
@@ -402,6 +406,7 @@ private fun PlayerHeader(
     onParentalGuideAnimationComplete: () -> Unit,
     onLockToggle: () -> Unit,
     onVideoSettingsClick: (() -> Unit)?,
+    onQuickChannelsClick: (() -> Unit)?,
     onOpenInExternalPlayer: (() -> Unit)?,
     onPartyClick: (() -> Unit)?,
     partyActive: Boolean,
@@ -522,6 +527,15 @@ private fun PlayerHeader(
                             iconSize = metrics.headerIconSize,
                             onClick = onPartyClick,
                             tint = if (partyActive) MaterialTheme.colorScheme.primary else Color.White,
+                        )
+                    }
+                    if (onQuickChannelsClick != null) {
+                        PlayerHeaderIconButton(
+                            icon = Icons.Filled.Tv,
+                            contentDescription = stringResource(Res.string.livetv_header_quick_channels),
+                            buttonSize = metrics.headerIconSize + 16.dp,
+                            iconSize = metrics.headerIconSize,
+                            onClick = onQuickChannelsClick,
                         )
                     }
                     PlayerHeaderIconButton(

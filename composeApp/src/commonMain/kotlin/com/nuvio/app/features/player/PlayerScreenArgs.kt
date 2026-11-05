@@ -43,5 +43,6 @@ internal data class PlayerScreenArgs(
     val launchId: Long? = null,
     val sourceFilename: String? = null,
     val onOpenPartyMedia: (PartyMedia) -> Unit = {},
+    val onQuickChannelsClick: (() -> Unit)? = null,
     val stream: com.nuvio.app.features.streams.StreamItem? = null,
 )

@@ -24,6 +24,7 @@ fun PlayerScreen(
     onOpenInExternalPlayer: ((ExternalPlayerPlaybackRequest) -> Unit)? = null,
     onOpenExternalUrl: ((String) -> Unit)? = null,
     onOpenPartyMedia: (PartyMedia) -> Unit = {},
+    onQuickChannelsClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     logo: String? = null,
     poster: String? = null,
@@ -94,6 +95,7 @@ fun PlayerScreen(
             sourceFilename = sourceFilename,
             onOpenPartyMedia = onOpenPartyMedia,
             stream = stream,
+            onQuickChannelsClick = onQuickChannelsClick,
         )
     )
 }

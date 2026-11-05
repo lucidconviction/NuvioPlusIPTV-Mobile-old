@@ -141,6 +141,8 @@ data class LiveChannel(
     val tvgId: String?,
     val tvgName: String?,
     val logo: String?,
+    /** Thumbnail/banner image for the stream (different from logo). Used when available as the user-facing image. */
+    val thumbnail: String? = null,
     /** Group id (unique across playlists) and its display title. */
     val groupId: String,
     val group: String,

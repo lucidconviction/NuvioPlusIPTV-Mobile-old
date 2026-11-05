@@ -476,6 +476,9 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             kotlin.srcDir(generatedRuntimeConfigDir)
+            // Include Compose resource accessors generated for commonMain
+            val resourceAccessorsDir = project.file("build/generated/compose/resourceGenerator/kotlin/commonMainResourceAccessors")
+            kotlin.srcDir(resourceAccessorsDir)
         }
         androidMain {
             kotlin.srcDir(project.file(androidDistributionSourceDir))
@@ -514,6 +517,14 @@ kotlin {
                 implementation("androidx.annotation:annotation-experimental:1.3.1")
                 implementation(libs.mpv.android.lib)
                 implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("lib-*.aar"))))
+                // SmartTube's YouTube engine (MediaServiceCore), Android only
+                implementation(project(":mediaservicecore:youtubeapi"))
+                implementation(project(":mediaservicecore:mediaserviceinterfaces"))
+                implementation(project(":mediaservicecore:sharedutils"))
+                implementation(project(":mediaservicecore:j2v8"))
+                implementation("com.grack:nanojson:1.7")
+                implementation("io.reactivex.rxjava2:rxjava:2.2.21")
+                implementation("io.reactivex.rxjava2:rxandroid:2.1.1")
                 if (androidDistribution == "full") {
                     implementation(files("libs/quickjs-kt-android-1.0.5-nuvio.aar"))
                     implementation(libs.ksoup)

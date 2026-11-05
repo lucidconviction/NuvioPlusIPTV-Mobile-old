@@ -70,6 +70,7 @@ import com.nuvio.app.core.ui.NuvioScreenHeader
 import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.core.ui.nuvioSafeBottomPadding
+import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.livetv.data.LiveTvRepository
 import com.nuvio.app.features.livetv.model.ChannelGroup
 import com.nuvio.app.features.livetv.model.EpgProgram
@@ -129,16 +130,23 @@ fun LiveTvGuideScreen(
         while (true) { value = LiveTvClock.nowMs(); delay(30_000) }
     }
     val playlists by LiveTvPreferences.playlists.collectAsStateWithLifecycle()
+    val addonUiState by AddonRepository.uiState.collectAsStateWithLifecycle()
+    val addons = addonUiState.addons
     val savedPlaylist by PlaylistFilter.selected.collectAsStateWithLifecycle()
     val allSections = state.sections.filter { it.channels.isNotEmpty() }
-    val playlistChoices = remember(allSections, playlists) {
-        playlists.mapNotNull { p ->
+    val playlistChoices = remember(allSections, playlists, addons) {
+        val baseChoices = playlists.mapNotNull { p ->
             val n = allSections.count { it.group.sourceId == p.id }
             if (n > 0) PlaylistChoice(p.id, p.name, if (n == 1) "1 group" else "$n groups") else null
         }
+        val addonChoices = addons.filter { it.manifest != null && it.manifest!!.catalogs.isNotEmpty() }.map { addon ->
+            val manifest = addon.manifest!!
+            PlaylistChoice("addon:${addon.manifestUrl}", manifest.name, "${manifest.catalogs.size} catalog${if (manifest.catalogs.size != 1) "s" else ""}")
+        }
+        baseChoices + addonChoices
     }
     val playlistId = PlaylistFilter.effective(savedPlaylist, playlistChoices.map { it.id })
-    val sections = if (playlistId == null) allSections else allSections.filter { it.group.sourceId == null || it.group.sourceId == playlistId }
+    val sections = if (playlistId == null) allSections else if (playlistId.startsWith("addon:")) allSections else allSections.filter { it.group.sourceId == null || it.group.sourceId == playlistId }
     // Saved, so backing out of a channel returns to the same group and spot in the guide.
     var selectedGroupId by rememberSaveable { mutableStateOf<String?>(null) }
     val selected = sections.firstOrNull { it.group.id == selectedGroupId } ?: sections.firstOrNull()
@@ -230,7 +238,14 @@ fun LiveTvGuideScreen(
                     choices = playlistChoices,
                     selectedId = playlistId,
                     allDetail = allSections.count { it.group.sourceId != null }.let { if (it == 1) "1 group" else "$it groups" },
-                    onSelect = PlaylistFilter::select,
+                    onSelect = { id ->
+                        if (id != null && id.startsWith("addon:")) {
+                            // For addons, just select "All playlists" since addons don't have channels in the guide
+                            PlaylistFilter.select(null)
+                        } else {
+                            PlaylistFilter.select(id)
+                        }
+                    },
                     compact = true,
                 )
             }
@@ -456,10 +471,10 @@ private fun GuideChannelTile(channel: LiveChannel, isFavorite: Boolean, onPlay: 
 @Composable
 private fun LogoFill(channel: LiveChannel, modifier: Modifier) {
     val tokens = MaterialTheme.nuvio
-    val logo = channel.logo?.takeIf { it.isNotBlank() }
+    val image = channel.thumbnail?.takeIf { it.isNotBlank() } ?: channel.logo?.takeIf { it.isNotBlank() }
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        if (logo != null) {
-            AsyncImage(model = logo, contentDescription = channel.name, modifier = Modifier.fillMaxSize().padding(NuvioTokens.Space.s2), contentScale = ContentScale.Fit)
+        if (image != null) {
+            AsyncImage(model = image, contentDescription = channel.name, modifier = Modifier.fillMaxSize().padding(NuvioTokens.Space.s2), contentScale = ContentScale.Fit)
         } else {
             Text(channel.name.trim().take(3).uppercase(), style = MaterialTheme.typography.labelLarge, color = tokens.colors.textMuted, fontWeight = FontWeight.Bold, maxLines = 1)
         }

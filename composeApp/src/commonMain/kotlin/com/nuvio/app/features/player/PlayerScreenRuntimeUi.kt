@@ -381,6 +381,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(
             } else {
                 null
             },
+            onQuickChannelsClick = args.onQuickChannelsClick,
             partyActive = partyActive,
             onTogglePlayback = { togglePlayback() },
             onSeekBack = { seekBy(-10_000L) },
