@@ -5,9 +5,6 @@ internal expect object SportsPlatform {
     /** GET [url] as text (JSON). Throws with a plain message on failure ("HTTP 404", "timed out"). */
     suspend fun get(url: String): String
 
-    /** GET [url] with a single extra header ([name] -> [value]), for authenticated feeds (CitoAPI). */
-    suspend fun getWithHeader(url: String, name: String, value: String): String
-
     /** The device's country ("US", "GB"), upper case; "" when unknown. */
     fun countryCode(): String
 

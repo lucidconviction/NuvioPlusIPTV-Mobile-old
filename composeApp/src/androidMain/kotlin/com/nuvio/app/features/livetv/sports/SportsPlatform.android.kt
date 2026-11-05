@@ -23,12 +23,9 @@ internal actual object SportsPlatform {
             .build()
     }
 
-    actual suspend fun get(url: String): String = getWithHeader(url, "Accept", "application/json")
-
-    actual suspend fun getWithHeader(url: String, name: String, value: String): String = withContext(Dispatchers.IO) {
+    actual suspend fun get(url: String): String = withContext(Dispatchers.IO) {
         val req = Request.Builder().url(url)
             .header("Accept", "application/json")
-            .header(name, value)
             .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36")
             .build()
         try {

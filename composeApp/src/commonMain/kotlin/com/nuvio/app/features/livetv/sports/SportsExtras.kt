@@ -24,30 +24,6 @@ data class TableRow(val pos: String, val team: String, val a: String, val b: Str
 /** A team's starting line-up (football). */
 data class Lineup(val team: String, val teamId: String?, val formation: String?, val players: List<String>)
 
-/** One bout on a fight card (UFC, BKFC, ONE, Bellator…): who's fighting and what's at stake. */
-data class FightBout(
-    val id: String,
-    val order: Int,
-    val weightClass: String?,
-    val type: String?,
-    val rounds: Int?,
-    val fighter1: String,
-    val fighter2: String,
-    val record1: String?,
-    val record2: String?
-) {
-    val headliner: Boolean get() = type.equals("Main Event", true) || order <= 3
-}
-
-/** A fight card: the bouts of an event, from CitoAPI (or the guide when it lists them). */
-data class FightCard(
-    val eventId: String,
-    val name: String,
-    val date: String?,
-    val venue: String?,
-    val bouts: List<FightBout> = emptyList()
-)
-
 data class GameExtras(
     val stats: List<StatLine> = emptyList(),
     val performers: List<Performer> = emptyList(),
@@ -68,9 +44,7 @@ data class GameExtras(
     val draw: Double? = null,
     /** The home team's chance through the game (0–1), oldest first. */
     val winHistory: List<Float> = emptyList(),
-    val lineups: List<Lineup> = emptyList(),
-    /** A fight card for this event (MMA/Combat sports). */
-    val fightCard: FightCard? = null
+    val lineups: List<Lineup> = emptyList()
 ) {
     val hasMatchInfo: Boolean get() = venue != null || tempF != null || referee != null || attendance != null
     val hasOdds: Boolean get() = homeWin != null && awayWin != null

@@ -28,8 +28,6 @@ import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.sp
 import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.nuvio
-import com.nuvio.app.features.livetv.sports.FightBout
-import com.nuvio.app.features.livetv.sports.FightCard
 import com.nuvio.app.features.livetv.sports.GameExtras
 import com.nuvio.app.features.livetv.sports.GameState
 import com.nuvio.app.features.livetv.sports.Side
@@ -55,7 +53,6 @@ internal fun LazyListScope.gameExtrasItems(ev: SportsEvent, x: GameExtras, sides
     if (x.hasOdds && !hideScores) item(key = "x:odds") { Panel(if (pre) "Chances" else "Win probability") { ChancePanel(x, away, home) } }
     if (x.table.isNotEmpty()) item(key = "x:table") { Panel(x.tableTitle ?: "Table") { TablePanel(x) } }
     if (x.hasMatchInfo) item(key = "x:info") { Panel("Match info") { InfoPanel(x) } }
-    if (x.fightCard != null) item(key = "x:card") { Panel("Fight card") { FightCardPanel(x.fightCard!!) } }
 }
 
 @Composable
@@ -223,57 +220,3 @@ private fun InfoPanel(x: GameExtras) {
         }
     }
 }
-
-@Composable
-private fun FightCardPanel(card: FightCard) {
-    val tokens = MaterialTheme.nuvio
-    Column(verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8)) {
-        card.date?.let { d ->
-            SportsDates.localDateOf(d)?.let { Text(SportsDates.longDateLabel(it), style = MaterialTheme.typography.labelSmall, color = tokens.colors.textMuted) }
-        }
-        card.venue?.let { v ->
-            Text(v, style = MaterialTheme.typography.bodySmall, color = tokens.colors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        if (card.bouts.isEmpty()) {
-            Text("Bouts to be announced", style = MaterialTheme.typography.bodySmall, color = tokens.colors.textMuted)
-        } else {
-            card.bouts.forEach { bout ->
-                FightBoutRow(bout)
-            }
-        }
-    }
-}
-
-@Composable
-private fun FightBoutRow(bout: FightBout) {
-    val tokens = MaterialTheme.nuvio
-    val headliner = bout.headliner
-    val color = if (headliner) tokens.colors.accent else tokens.colors.textPrimary
-    val weight = if (headliner) FontWeight.Black else FontWeight.SemiBold
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(tokens.shapes.compactCard)
-            .background(if (headliner) tokens.colors.accent.copy(alpha = 0.12f) else tokens.colors.surface)
-            .padding(horizontal = NuvioTokens.Space.s10, vertical = NuvioTokens.Space.s8),
-        verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s2)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s6)) {
-            Text(bout.order.toString(), style = MaterialTheme.typography.labelSmall, color = if (headliner) tokens.colors.accent else tokens.colors.textMuted, modifier = Modifier.width(20.dp), textAlign = TextAlign.Center)
-            bout.weightClass?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = tokens.colors.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-            bout.type?.let { t ->
-                if (t.equals("Main Event", true)) Text("MAIN", style = MaterialTheme.typography.labelSmall, color = Color(0xFFFFD700), fontWeight = FontWeight.Black)
-                else Text(t.uppercase(), style = MaterialTheme.typography.labelSmall, color = tokens.colors.textMuted)
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s4)) {
-            Text(bout.fighter1, style = MaterialTheme.typography.bodyMedium, color = color, fontWeight = weight, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            bout.record1?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = tokens.colors.textSecondary) }
-            Text("VS", style = MaterialTheme.typography.labelSmall, color = tokens.colors.textMuted, textAlign = TextAlign.Center, modifier = Modifier.width(28.dp))
-            bout.record2?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = tokens.colors.textSecondary) }
-            Text(bout.fighter2, style = MaterialTheme.typography.bodyMedium, color = color, fontWeight = weight, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
-        }
-    }
-}
-
-

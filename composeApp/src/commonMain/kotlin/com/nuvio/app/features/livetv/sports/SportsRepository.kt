@@ -264,10 +264,6 @@ internal object SportsRepository {
         if (started) return
         started = true
         LiveTvPlayback.gameFailover = { key, tried -> nextChannelForGame(key, tried) }
-        // Apply CitoAPI key from settings as soon as we start.
-        scope.launch {
-            settings.collect { cfg -> SportsFeeds.setCitoKey(cfg.citoKey.ifBlank { null }) }
-        }
         scope.launch {
             runCatching { withContext(Dispatchers.Default) { loadCache() } }
             runCatching { updateLoop() }
@@ -1205,38 +1201,7 @@ internal object SportsRepository {
         if (ev.state == GameState.PRE) emptyList() else summaryFor(ev)?.plays.orEmpty()
 
     /** Everything else about the game ESPN has (see [GameExtras]); null when there's nothing to ask. */
-    suspend fun gameExtras(ev: SportsEvent): GameExtras? = withContext(Dispatchers.Default) {
-        val base = summaryFor(ev)?.extras ?: GameExtras()
-        val league = SportsCatalog.league(ev.leagueId)
-        if (league?.sport == Sport.FIGHTING && base.fightCard == null) {
-            // Try CitoAPI for a bout list (BKFC, UFC, Bellator, PFL).
-            // For guide events, match by name/date from upcoming cards; for ESPN events, use the slug.
-            val card = runCatching {
-                val key = SportsFeeds.citoKey ?: return@runCatching null
-                val org = SportsFeeds.citoSlug(league) ?: return@runCatching null
-                // First try direct slug extraction for ESPN-backed events (mma/ufc, mma/bellator, mma/pfl)
-                val directSlug = if (league.id.startsWith("mma/")) {
-                    ev.espnId ?: ev.id.substringAfter(':').substringAfter(':').substringBefore(':')
-                } else null
-                if (directSlug != null) {
-                    SportsFeeds.fightCard(league, directSlug) { url, h, v -> SportsPlatform.getWithHeader(url, h, v) }
-                } else {
-                    // Guide events: match by name from upcoming cards
-                    val upcoming = SportsFeeds.upcomingCards(league) { url, h, v -> SportsPlatform.getWithHeader(url, h, v) }
-                    val match = upcoming.find { c ->
-                        c.name.contains(ev.title, ignoreCase = true) ||
-                        ev.title.contains(c.name, ignoreCase = true) ||
-                        (c.date != null && SportsDates.localDateOf(c.date) == SportsDates.dayOf(ev.startMs))
-                    }
-                    match?.eventId?.let { slug ->
-                        SportsFeeds.fightCard(league, slug) { url, h, v -> SportsPlatform.getWithHeader(url, h, v) }
-                    }
-                }
-            }.getOrNull()
-            if (card != null) return@withContext base.copy(fightCard = card)
-        }
-        if (base == GameExtras() && league?.kind != LeagueKind.TEAMS) null else base
-    }
+    suspend fun gameExtras(ev: SportsEvent): GameExtras? = summaryFor(ev)?.extras
 
     // ------------------------------------------------------------------ your choices
 
