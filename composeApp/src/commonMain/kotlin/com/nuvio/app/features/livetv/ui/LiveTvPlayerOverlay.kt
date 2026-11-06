@@ -72,11 +72,16 @@ import com.nuvio.app.features.livetv.model.EpgProgram
 import com.nuvio.app.features.livetv.model.LiveChannel
 import com.nuvio.app.features.livetv.model.LiveTvClock
 import com.nuvio.app.features.livetv.player.LiveTvPlayback
+import com.nuvio.app.features.livetv.ui.quickchannels.QuickChannel
+import com.nuvio.app.features.livetv.ui.quickchannels.QuickChannelList
+import com.nuvio.app.features.livetv.ui.quickchannels.QuickStreamChecker
 import kotlinx.coroutines.delay
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.action_close
+import nuvio.composeapp.generated.resources.livetv_no_matching_channels
 import nuvio.composeapp.generated.resources.livetv_player_channels
 import nuvio.composeapp.generated.resources.livetv_player_guide
+import nuvio.composeapp.generated.resources.livetv_player_quick_channels
 import org.jetbrains.compose.resources.stringResource
 
 private const val HOUR_MS = 60L * 60L * 1000L
@@ -117,6 +122,7 @@ internal fun LiveTvPlayerOverlay(
     var panelOpen by rememberSaveable { mutableStateOf(false) }
     var groupId by rememberSaveable { mutableStateOf<String?>(null) }
     var showGuide by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    var quickChannels by rememberSaveable { mutableStateOf(false) }
     var banner by remember { mutableStateOf<LiveChannel?>(null) }
     // The group you're in: the one picked in the panel, else the first that has the channel.
     val section = sections.firstOrNull { it.group.id == groupId && it.channels.any { c -> c.key == currentKey } }
@@ -244,12 +250,15 @@ internal fun LiveTvPlayerOverlay(
                     modifier = Modifier.padding(horizontal = NuvioTokens.Space.s10, vertical = NuvioTokens.Space.s8)
                         .clip(RoundedCornerShape(NuvioTokens.Radius.md)).background(tokens.colors.surface).padding(NuvioTokens.Space.s2),
                 ) {
-                    SegmentButton(stringResource(Res.string.livetv_player_channels), selected = !guide, modifier = Modifier.weight(1f)) { showGuide = false }
-                    SegmentButton(stringResource(Res.string.livetv_player_guide), selected = guide, modifier = Modifier.weight(1f)) { showGuide = true }
+                    SegmentButton(stringResource(Res.string.livetv_player_channels), selected = !guide && !quickChannels, modifier = Modifier.weight(1f)) { showGuide = false; quickChannels = false }
+                    SegmentButton(stringResource(Res.string.livetv_player_guide), selected = guide, modifier = Modifier.weight(1f)) { showGuide = true; quickChannels = false }
+                    SegmentButton(stringResource(Res.string.livetv_player_quick_channels), selected = quickChannels, modifier = Modifier.weight(1f)) { showGuide = false; quickChannels = true }
                 }
                 val channels = section?.channels.orEmpty()
                 if (guide) {
                     MiniGuide(channels, currentKey, now, onSwitch = { c, t -> onSwitch(c, t) })
+                } else if (quickChannels) {
+                    PlayerQuickChannelsPanel(onSwitch = onSwitch)
                 } else {
                     val start = channels.indexOfFirst { it.key == currentKey }.coerceAtLeast(0)
                     val listState = rememberLazyListState(initialFirstVisibleItemIndex = start)
@@ -458,6 +467,105 @@ private fun MiniGuideRow(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Quick Channels panel shown inside the player's channel panel: pick a curated QuickChannel bundle
+ * and switch to the first matching live channel. Stream liveness is probed so only working channels
+ * appear (the "checking" state is shown while probing).
+ */
+@Composable
+private fun PlayerQuickChannelsPanel(onSwitch: (LiveChannel, String?) -> Unit) {
+    val tokens = MaterialTheme.nuvio
+    val c = tokens.colors
+    val liveChannels by LiveTvRepository.channels.collectAsStateWithLifecycle(initialValue = emptyList())
+    val categories = QuickChannelList.getChannelCategories()
+    var selectedCategory by remember { mutableStateOf(categories.firstOrNull() ?: "all") }
+    val filteredQc = remember(selectedCategory) { QuickChannelList.getChannelsForCategory(selectedCategory) }
+    var selectedQc by remember { mutableStateOf<QuickChannel?>(null) }
+    var matches by remember { mutableStateOf<List<LiveChannel>>(emptyList()) }
+    var aliveByUrl by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
+
+    LaunchedEffect(selectedQc) {
+        if (selectedQc != null) {
+            aliveByUrl = emptyMap()
+            val q = selectedQc!!
+            matches = liveChannels.filter { QuickChannelList.matches(q, it) }
+            if (matches.isNotEmpty()) {
+                val statuses = QuickStreamChecker.checkBatch(matches.map { it.url })
+                aliveByUrl = statuses
+            }
+        } else {
+            matches = emptyList()
+            aliveByUrl = emptyMap()
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = NuvioTokens.Space.s10, vertical = NuvioTokens.Space.s4),
+        verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s6),
+    ) {
+        // Category row
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s4),
+            contentPadding = PaddingValues(vertical = NuvioTokens.Space.s2),
+        ) {
+            items(categories) { catId ->
+                val cat = QuickChannelList.allCategories().find { it.id == catId }
+                val title = cat?.title ?: catId
+                val isActive = catId == selectedCategory
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(if (isActive) c.accent else c.surfaceCard)
+                        .clickable { selectedCategory = catId }
+                        .padding(horizontal = NuvioTokens.Space.s8, vertical = NuvioTokens.Space.s4),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(title, style = MaterialTheme.typography.labelMedium, color = if (isActive) Color.White else c.textPrimary, fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal)
+                }
+            }
+        }
+        // Quick channel chip row
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s4),
+            contentPadding = PaddingValues(vertical = NuvioTokens.Space.s2),
+        ) {
+            items(filteredQc, key = { it.displayName }) { qc ->
+                val isActive = selectedQc?.displayName == qc.displayName
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(NuvioTokens.Radius.md))
+                        .background(if (isActive) c.accent.copy(alpha = 0.2f) else c.surfaceCard)
+                        .clickable { selectedQc = if (isActive) null else qc }
+                        .padding(horizontal = NuvioTokens.Space.s8, vertical = NuvioTokens.Space.s6),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(qc.displayName, style = MaterialTheme.typography.bodyMedium, color = if (isActive) c.accent else c.textPrimary, fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+        // Match list
+        if (selectedQc != null && matches.isNotEmpty()) {
+            val sortedMatches = matches.sortedWith(
+                compareByDescending<LiveChannel> { ch -> aliveByUrl[ch.url] == true }
+                    .thenByDescending { ch -> aliveByUrl[ch.url] == null }
+            ).filter { ch -> aliveByUrl[ch.url] != false }
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s4),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = NuvioTokens.Space.s8),
+            ) {
+                items(sortedMatches, key = { it.key }) { ch ->
+                    PanelChannelRow(ch, null, LiveTvClock.nowMs(), playing = false) { onSwitch(ch, null) }
+                }
+            }
+        } else if (selectedQc != null && matches.isEmpty() && aliveByUrl.isNotEmpty()) {
+            Text(stringResource(Res.string.livetv_no_matching_channels), style = MaterialTheme.typography.bodySmall, color = c.textMuted, modifier = Modifier.padding(NuvioTokens.Space.s8))
         }
     }
 }

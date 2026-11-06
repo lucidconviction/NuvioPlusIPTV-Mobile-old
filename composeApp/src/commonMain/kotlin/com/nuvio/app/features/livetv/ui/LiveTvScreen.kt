@@ -350,11 +350,11 @@ fun LiveTvScreen(
                 isAddonsSection = false,
             )
         }.let { list ->
-            val recentIndex = list.indexOfFirst { it.group.id == ChannelGroup.RECENT }
-            if (recentIndex >= 0) {
-                list.subList(0, recentIndex + 1) +
+            val allIndex = list.indexOfFirst { it.group.id == ChannelGroup.ALL }
+            if (allIndex >= 0) {
+                list.subList(0, allIndex + 1) +
                 listOf(CombinedSection(group = ChannelGroup("", "", 0), channels = emptyList(), isAddonsSection = true)) +
-                list.subList(recentIndex + 1, list.size)
+                list.subList(allIndex + 1, list.size)
             } else {
                 list + listOf(CombinedSection(group = ChannelGroup("", "", 0), channels = emptyList(), isAddonsSection = true))
             }

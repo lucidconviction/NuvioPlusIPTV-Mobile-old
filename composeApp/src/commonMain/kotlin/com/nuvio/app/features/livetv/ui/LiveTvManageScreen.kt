@@ -191,7 +191,7 @@ private fun ManageGroups(groups: List<ChannelGroup>, hidden: Set<String>) {
 private fun ManageChannels(all: LiveTvListState, hidden: Set<String>) {
     val tokens = MaterialTheme.nuvio
     val haptics = LocalHapticFeedback.current
-    val groups = all.sections.map { it.group }.filter { it.id != ChannelGroup.RECENT }
+    val groups = all.sections.map { it.group }.filter { it.id != ChannelGroup.RECENT && it.id != ChannelGroup.ALL }
     var groupId by rememberSaveable { mutableStateOf<String?>(null) }
     val selected = all.sections.firstOrNull { it.group.id == groupId } ?: all.sections.firstOrNull { it.group.id != ChannelGroup.RECENT }
     val source: List<LiveChannel> = selected?.channels.orEmpty()

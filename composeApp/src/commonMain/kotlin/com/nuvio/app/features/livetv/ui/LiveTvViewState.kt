@@ -101,6 +101,11 @@ internal object LiveTvViewState {
         if (s.showRecentGroup && recent.isNotEmpty()) {
             sections += LiveGroupSection(ChannelGroup(ChannelGroup.RECENT, "Recently watched", recent.size, special = true), recent)
         }
+        // "All Groups": every channel across all groups, deduplicated, in the channel sort order.
+        val allChannels = visible.distinctBy { it.key }
+        if (allChannels.isNotEmpty()) {
+            sections += LiveGroupSection(ChannelGroup(ChannelGroup.ALL, "All Groups", allChannels.size, special = true), sorted(allChannels))
+        }
 
         val regular = ArrayList<LiveGroupSection>()
         val custom = user.customGroups.filter { it.id !in user.hiddenGroups }
