@@ -691,6 +691,16 @@ internal object SportsRepository {
             val list = runCatching { SportsFeeds.parseFixtures(l, raw) }.getOrDefault(emptyList())
             fixtureData.update { it + (l.id to LeagueData(list, LiveTvClock.nowMs(), null)) }
         }
+        // BKFC: official API (sporting-events.org doesn't have BKFC data)
+        val bkfcLeague = SportsCatalog.league("guide/bkfc")
+        if (bkfcLeague != null) {
+            val raw = runCatching { feeds.bkfcEventsRaw() }.getOrNull()
+            if (raw != null) {
+                val list = runCatching { SportsFeeds.parseBkfcEvents(bkfcLeague, raw) }.getOrDefault(emptyList())
+                fixtureData.update { it + ("guide/bkfc" to LeagueData(list, LiveTvClock.nowMs(), null)) }
+                runCatching { LiveTvFiles.writeSmall(DIR, "fx_bkfc.json", raw) }
+            }
+        }
         // Wrestling's schedule (and boxing's fight cards), one file for all of them.
         val wrestling = SportsCatalog.all.filter { (it.sport == Sport.WRESTLING || it.id == "guide/boxing") && it.id !in tsdbAlias }.map { it.id }.toSet()
         if (wrestling.isNotEmpty()) {
@@ -723,6 +733,13 @@ internal object SportsRepository {
             val slug = l.fixtureSlug ?: continue
             val text = LiveTvFiles.readSmall(DIR, "fx_$slug.json") ?: continue
             runCatching { fx[l.id] = LeagueData(SportsFeeds.parseFixtures(l, text), 0L, null) }
+        }
+        // BKFC cache
+        runCatching {
+            LiveTvFiles.readSmall(DIR, "fx_bkfc.json")?.let { text ->
+                val l = SportsCatalog.league("guide/bkfc")
+                if (l != null) fx["guide/bkfc"] = LeagueData(SportsFeeds.parseBkfcEvents(l, text), 0L, null)
+            }
         }
         runCatching {
             LiveTvFiles.readSmall(DIR, "fx_wrestling.json")?.let { text -> SportsFeeds.parseWrestling(text).forEach { (id, list) -> fx[id] = LeagueData(list, 0L, null) } }

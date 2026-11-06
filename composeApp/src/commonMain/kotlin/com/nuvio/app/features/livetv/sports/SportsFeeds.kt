@@ -65,6 +65,11 @@ internal class SportsFeeds {
 
     suspend fun fixturesRaw(slug: String): String = get("https://sporting-events.org/data/$slug.json")
 
+    // ------------------------------------------------------------------ BKFC official API
+
+    /** BKFC upcoming events from the official API (no key required). */
+    suspend fun bkfcEventsRaw(): String = get("https://api.bkfc.com/events")
+
     /**
      * The wrestling schedule (WWE, AEW…): a file a daily GitHub job makes from TheSportsDB, so
      * the app never asks TheSportsDB itself.
@@ -934,6 +939,36 @@ internal class SportsFeeds {
                 )
             }
             return out
+        }
+
+        /** Parse BKFC events from the official API into SportsEvent shape. */
+        fun parseBkfcEvents(league: League, raw: String): List<SportsEvent> {
+            val arr = org.json.JSONArray(raw)
+            val out = ArrayList<SportsEvent>()
+            for (i in 0 until arr.length()) {
+                val e = arr.optJSONObject(i) ?: continue
+                val dateStr = e.optString("event_date", "").takeIf { it.isNotBlank() } ?: continue
+                val start = parseIso(dateStr.replace(' ', 'T') + "Z") ?: continue
+                val name = e.optString("name", "").takeIf { it.isNotBlank() } ?: continue
+                val slug = e.optString("slug", "").takeIf { it.isNotBlank() } ?: continue
+                val venue = e.optString("venue_name", "").takeIf { it.isNotBlank() }
+                val location = e.optString("location", "").takeIf { it.isNotBlank() }
+                out += SportsEvent(
+                    id = "bkfc:${league.id}:$slug",
+                    leagueId = league.id,
+                    startMs = start,
+                    hasTime = true,
+                    state = GameState.PRE,
+                    title = name.replace(Regex("(\\b\\w)")) { it.value.uppercase() },
+                    subtitle = listOfNotNull(venue, location).firstOrNull { it.isNotBlank() },
+                    status = null,
+                    away = null, home = null,
+                    broadcasts = emptyList(),
+                    source = EventSource.FIXTURES,
+                    note = null
+                )
+            }
+            return out.sortedBy { it.startMs }
         }
     }
 }
