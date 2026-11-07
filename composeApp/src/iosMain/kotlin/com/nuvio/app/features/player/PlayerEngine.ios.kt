@@ -56,6 +56,7 @@ actual fun PlatformPlayerSurface(
     resizeMode: PlayerResizeMode,
     playbackEngine: AndroidPlaybackEngine?,
     useNativeController: Boolean,
+    allowConcurrentAudio: Boolean,
     onInitialPositionHandled: (key: String, handled: Boolean) -> Unit,
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,

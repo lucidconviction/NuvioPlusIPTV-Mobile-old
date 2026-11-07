@@ -98,6 +98,7 @@ internal object LiveTvRepository {
     private var firstCheckDone = false
     private val embeddedEpgUrls = HashMap<String, List<String>>()
     private var refreshJob: Job? = null
+    private var lastRefreshCheckMs = 0L
 
     // ---------------------------------------------------------------- lifecycle
 
@@ -121,7 +122,10 @@ internal object LiveTvRepository {
 
     /** Opening Live TV: update anything past its update time. */
     fun refreshIfStale() {
-        if (!firstCheckDone || mutex.isLocked) return
+        if (!firstCheckDone || mutex.isLocked || _status.value.loading) return
+        // Switching tabs back and forth must not start a fresh check each time.
+        if (LiveTvClock.nowMs() - lastRefreshCheckMs < STALE_COOLDOWN_MS) return
+        lastRefreshCheckMs = LiveTvClock.nowMs()
         scope.launch { runCatching { refreshInternal(forcePlaylists = false, forceEpg = false) } }
     }
 
@@ -276,10 +280,16 @@ internal object LiveTvRepository {
     private suspend fun refreshInternal(forcePlaylists: Boolean, forceEpg: Boolean, forceIds: Set<String> = emptySet()) {
         mutex.withLock {
             try {
-                refreshBody(forcePlaylists, forceEpg, forceIds)
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                _status.value = LiveTvStatus(loading = false, loadedOnce = true, error = e.message ?: "Update failed")
+                try {
+                    refreshBody(forcePlaylists, forceEpg, forceIds)
+                } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    _status.value = LiveTvStatus(loading = false, loadedOnce = true, error = e.message ?: "Update failed")
+                }
+            } finally {
+                // A cancelled or failed update must never leave the screen on the spinner.
+                _status.value = _status.value.copy(loading = false, loadedOnce = true)
+                lastRefreshCheckMs = LiveTvClock.nowMs()
             }
             runCatching { sweepLeftoverFiles() }
         }
@@ -825,6 +835,7 @@ internal object LiveTvRepository {
 
     private const val HOUR = 60L * 60L * 1000L
     private const val STALE_CHECK_MS = 30L * 60L * 1000L
+    private const val STALE_COOLDOWN_MS = 5L * 60L * 1000L
     private const val GUIDE_VERSION = 1
 
     private val PLACEHOLDER_TITLES = Regex(

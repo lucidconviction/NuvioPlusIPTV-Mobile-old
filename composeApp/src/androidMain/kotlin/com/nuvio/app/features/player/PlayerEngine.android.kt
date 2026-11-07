@@ -128,6 +128,7 @@ actual fun PlatformPlayerSurface(
     resizeMode: PlayerResizeMode,
     playbackEngine: AndroidPlaybackEngine?,
     useNativeController: Boolean,
+    allowConcurrentAudio: Boolean,
     onInitialPositionHandled: (key: String, handled: Boolean) -> Unit,
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
@@ -166,6 +167,7 @@ actual fun PlatformPlayerSurface(
             initialPositionRequestKey = initialPositionRequestKey,
             resizeMode = resizeMode,
             useNativeController = useNativeController,
+            allowConcurrentAudio = allowConcurrentAudio,
             onInitialPositionHandled = onInitialPositionHandled,
             onControllerReady = onControllerReady,
             onSnapshot = onSnapshot,
@@ -185,6 +187,7 @@ actual fun PlatformPlayerSurface(
                 modifier = modifier,
                 playWhenReady = playWhenReady,
                 resizeMode = resizeMode,
+                allowConcurrentAudio = allowConcurrentAudio,
                 videoOutput = playerSettings.androidLibmpvVideoOutput,
                 hardwareDecodingEnabled = playerSettings.androidLibmpvHardwareDecodingEnabled,
                 yuv420pEnabled = playerSettings.androidLibmpvYuv420pEnabled,
@@ -225,6 +228,7 @@ private fun ExoPlayerSurface(
     initialPositionRequestKey: String?,
     resizeMode: PlayerResizeMode,
     useNativeController: Boolean,
+    allowConcurrentAudio: Boolean,
     onInitialPositionHandled: (key: String, handled: Boolean) -> Unit,
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
@@ -461,7 +465,7 @@ private fun ExoPlayerSurface(
         )
 
         val playerBuilder = ExoPlayer.Builder(context)
-            .setAudioAttributes(playbackAudioAttributes, true)
+            .setAudioAttributes(playbackAudioAttributes, !allowConcurrentAudio)
             .setTrackSelector(trackSelector)
             .setLoadControl(loadControl)
 
@@ -891,6 +895,8 @@ private fun ExoPlayerSurface(
                 override val playbackEngine = AndroidPlaybackEngine.ExoPlayer
 
                 private val audioTrackCache = AudioTrackCache()
+                private var currentVolume = 1f
+                private var muted = false
 
                 override fun play() {
                     exoPlayer.playWhenReady = true
@@ -922,6 +928,16 @@ private fun ExoPlayerSurface(
 
                 override fun setPlaybackSpeed(speed: Float) {
                     exoPlayer.setPlaybackSpeed(speed)
+                }
+
+                override fun setMuted(muted: Boolean) {
+                    this.muted = muted
+                    exoPlayer.volume = if (muted) 0f else currentVolume
+                }
+
+                override fun setVolume(volume: Float) {
+                    currentVolume = volume.coerceIn(0f, 1f)
+                    exoPlayer.volume = if (muted) 0f else currentVolume
                 }
 
                 override fun updateNowPlayingMetadata(info: PlayerNowPlayingInfo) {
@@ -1202,6 +1218,7 @@ private fun LibmpvPlayerSurface(
     modifier: Modifier,
     playWhenReady: Boolean,
     resizeMode: PlayerResizeMode,
+    allowConcurrentAudio: Boolean,
     videoOutput: AndroidLibmpvVideoOutput,
     hardwareDecodingEnabled: Boolean,
     yuv420pEnabled: Boolean,
@@ -1246,12 +1263,18 @@ private fun LibmpvPlayerSurface(
         onDispose { nowPlayingController?.release() }
     }
 
-    val audioFocus = remember(context) {
-        PlayerAudioFocus(context) { playerViewRef?.setPaused(true) }
+    // Concurrent panes (multi-view, in-app PiP) must not take exclusive audio focus, or they
+    // would pause each other as soon as the next window starts playing.
+    val audioFocus = remember(context, allowConcurrentAudio) {
+        if (allowConcurrentAudio) {
+            null
+        } else {
+            PlayerAudioFocus(context) { playerViewRef?.setPaused(true) }
+        }
     }
 
     DisposableEffect(audioFocus) {
-        onDispose { audioFocus.abandon() }
+        onDispose { audioFocus?.abandon() }
     }
 
     DisposableEffect(lifecycleOwner, nowPlayingController) {
@@ -1309,7 +1332,7 @@ private fun LibmpvPlayerSurface(
                     )
                 }
                 if (property == "pause" && !value) {
-                    coroutineScope.launch(Dispatchers.Main.immediate) { audioFocus.request() }
+                    coroutineScope.launch(Dispatchers.Main.immediate) { audioFocus?.request() }
                 }
                 if (property == "eof-reached" || property == "pause" || property == "paused-for-cache" || property == "seeking") {
                     dispatchSnapshot(updateKeepScreenOn = true)
@@ -1821,6 +1844,12 @@ private class NuvioLibmpvView(
 
             override fun setMuted(muted: Boolean) {
                 executeMpv { mpv.setPropertyBoolean("mute", muted) }
+            }
+
+            override fun setVolume(volume: Float) {
+                executeMpv {
+                    mpv.setPropertyDouble("volume", (volume.coerceIn(0f, 1f) * 100.0))
+                }
             }
 
             override fun getAudioTracks(): List<AudioTrack> =

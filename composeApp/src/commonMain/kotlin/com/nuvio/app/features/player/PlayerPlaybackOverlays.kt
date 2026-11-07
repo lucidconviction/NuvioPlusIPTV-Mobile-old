@@ -1,12 +1,18 @@
 package com.nuvio.app.features.player
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
@@ -29,6 +35,7 @@ internal fun BoxScope.PlayerPlaybackOverlays(
     horizontalSafePadding: Dp,
     onUnlock: () -> Unit,
     showOpeningOverlay: Boolean,
+    streamTransition: PlayerStreamTransition?,
     backdropArtwork: String?,
     logo: String?,
     title: String,
@@ -96,6 +103,12 @@ internal fun BoxScope.PlayerPlaybackOverlays(
         )
     }
 
+    PlayerStreamTransitionOverlay(
+        transition = streamTransition,
+        horizontalSafePadding = horizontalSafePadding,
+        onBack = onBackWithProgress,
+    )
+
     P2pLoadingStatus(
         visible = showP2pRebufferStats && errorMessage == null,
         message = p2pRebufferMessage,
@@ -150,5 +163,35 @@ internal fun BoxScope.PlayerPlaybackOverlays(
             message = errorMessage,
             onDismiss = onDismissError,
         )
+    }
+}
+
+/**
+ * Full-screen artwork for the incoming channel/stream while the player switches sources. The last
+ * non-null transition is kept for the exit fade so the artwork does not vanish abruptly.
+ */
+@Composable
+private fun PlayerStreamTransitionOverlay(
+    transition: PlayerStreamTransition?,
+    horizontalSafePadding: Dp,
+    onBack: () -> Unit,
+) {
+    var lastTransition by remember { mutableStateOf<PlayerStreamTransition?>(null) }
+    SideEffect { if (transition != null) lastTransition = transition }
+    AnimatedVisibility(
+        visible = transition != null,
+        enter = fadeIn(animationSpec = tween(durationMillis = 180)),
+        exit = fadeOut(animationSpec = tween(durationMillis = 240)),
+    ) {
+        lastTransition?.let { shown ->
+            OpeningOverlay(
+                artwork = shown.artwork,
+                logo = shown.logo,
+                title = shown.title,
+                onBack = onBack,
+                horizontalSafePadding = horizontalSafePadding,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }

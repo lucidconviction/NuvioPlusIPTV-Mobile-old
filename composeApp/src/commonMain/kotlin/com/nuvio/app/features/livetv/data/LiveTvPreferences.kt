@@ -227,6 +227,10 @@ internal object LiveTvKeys {
     const val sports = "sports"
     /** Sports: the teams, leagues and names you follow, and game reminders (per profile), as JSON. */
     const val sportsMine = "sports_mine"
+    /** Quick Channels: user-added regions and channels (this device only), as JSON. */
+    const val quickChannels = "quick_channels"
+    /** Multi-view: layouts the user saved (this device only), as JSON. */
+    const val multiViewLayouts = "multiview_layouts"
 
     /** Separates the EPG source id from the channel id in a stored EPG assignment. */
     const val EPG_SEP = "\u0001"
@@ -655,6 +659,26 @@ internal open class LiveTvPreferencesStore {
     fun currentPlaylists(): List<PlaylistSource> = LiveTvCodec.decodePlaylists(_data.value.str(LiveTvKeys.playlists))
     fun currentEpgSources(): List<EpgSource> = LiveTvCodec.decodeEpgs(_data.value.str(LiveTvKeys.epgs))
     fun currentSettings(): LiveTvSettings = readSettings(_data.value)
+
+    /** User-added Quick Channel regions and channels, as JSON, kept on this device. */
+    fun currentQuickChannelData(): String? = _device.value.str(LiveTvKeys.quickChannels)
+
+    fun saveQuickChannelData(json: String?) {
+        editDevice { p ->
+            if (json.isNullOrBlank()) p.remove(LiveTvKeys.quickChannels)
+            else p[LiveTvKeys.quickChannels] = PrefValue.Str(json)
+        }
+    }
+
+    /** Saved multi-view layouts, as JSON, kept on this device. */
+    fun currentMultiViewLayouts(): String? = _device.value.str(LiveTvKeys.multiViewLayouts)
+
+    fun saveMultiViewLayouts(json: String?) {
+        editDevice { p ->
+            if (json.isNullOrBlank()) p.remove(LiveTvKeys.multiViewLayouts)
+            else p[LiveTvKeys.multiViewLayouts] = PrefValue.Str(json)
+        }
+    }
 
     val settings: StateFlow<LiveTvSettings> = _data.map { readSettings(it) }
         .distinctUntilChanged()

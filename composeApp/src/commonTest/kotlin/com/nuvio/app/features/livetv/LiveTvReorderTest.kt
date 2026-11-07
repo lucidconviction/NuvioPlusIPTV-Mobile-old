@@ -18,7 +18,19 @@ class LiveTvReorderTest {
     }
 
     private fun channel(key: String, name: String, group: String, number: Int) =
-        LiveChannel(key, "pl", "Playlist", name, null, null, null, group, group, number, "http://h/$key.ts")
+        LiveChannel(
+            key = key,
+            sourceId = "pl",
+            sourceName = "Playlist",
+            name = name,
+            tvgId = null,
+            tvgName = null,
+            logo = null,
+            groupId = group,
+            group = group,
+            number = number,
+            url = "http://h/$key.ts",
+        )
 
     @Test
     fun channelOrderIsAMapOfGroupToKeys() {

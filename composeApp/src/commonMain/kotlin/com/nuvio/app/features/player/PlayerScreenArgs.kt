@@ -1,6 +1,7 @@
 package com.nuvio.app.features.player
 
 import androidx.compose.ui.Modifier
+import com.nuvio.app.features.addons.AddonCatalog
 import com.nuvio.app.features.party.PartyMedia
 
 internal data class PlayerScreenArgs(
@@ -44,5 +45,6 @@ internal data class PlayerScreenArgs(
     val sourceFilename: String? = null,
     val onOpenPartyMedia: (PartyMedia) -> Unit = {},
     val onQuickChannelsClick: (() -> Unit)? = null,
+    val onOpenAddonCatalog: ((manifestUrl: String, catalog: AddonCatalog) -> Unit)? = null,
     val stream: com.nuvio.app.features.streams.StreamItem? = null,
 )

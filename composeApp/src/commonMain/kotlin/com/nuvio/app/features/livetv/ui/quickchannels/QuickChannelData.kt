@@ -1,6 +1,19 @@
 package com.nuvio.app.features.livetv.ui.quickchannels
 
+import com.nuvio.app.features.livetv.data.LiveTvPreferences
 import com.nuvio.app.features.livetv.model.LiveChannel
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 
 data class QuickChannel(
     val displayName: String,
@@ -39,31 +52,116 @@ object QuickChannelList {
     )
 
     private val _customCategories = mutableListOf<QuickCategory>()
-    val customCategories: List<QuickCategory> get() = _customCategories.toList()
+    val customCategories: List<QuickCategory> get() { ensureLoaded(); return _customCategories.toList() }
+
+    private val _customChannels = mutableListOf<QuickChannel>()
+    val customChannels: List<QuickChannel> get() { ensureLoaded(); return _customChannels.toList() }
+
+    private var loaded = false
+
+    /**
+     * User-added regions and channels are stored on this device so they survive a restart. The
+     * first Quick Channels read loads them; every add, edit or delete writes them back.
+     */
+    private fun ensureLoaded() {
+        if (loaded) return
+        loaded = true
+        val raw = LiveTvPreferences.currentQuickChannelData() ?: return
+        runCatching {
+            val root = Json.parseToJsonElement(raw).jsonObject
+            root["categories"]?.jsonArray?.forEach { element ->
+                val o = element.jsonObject
+                val id = o.string("id")
+                if (id.isNotBlank() && _customCategories.none { it.id == id }) {
+                    _customCategories += QuickCategory(
+                        id = id,
+                        title = o.string("title").ifBlank { id },
+                        description = o.string("description"),
+                        tags = o.strings("tags"),
+                    )
+                }
+            }
+            root["channels"]?.jsonArray?.forEach { element ->
+                val o = element.jsonObject
+                val name = o.string("displayName")
+                if (name.isNotBlank() && _customChannels.none { it.displayName == name }) {
+                    _customChannels += QuickChannel(
+                        displayName = name,
+                        aliases = o.strings("aliases"),
+                        regions = o.strings("regions"),
+                        tags = o.strings("tags"),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun persist() {
+        val json = buildJsonObject {
+            put("categories", buildJsonArray {
+                _customCategories.forEach { category ->
+                    add(buildJsonObject {
+                        put("id", category.id)
+                        put("title", category.title)
+                        put("description", category.description)
+                        put("tags", buildJsonArray { category.tags.forEach { add(it) } })
+                    })
+                }
+            })
+            put("channels", buildJsonArray {
+                _customChannels.forEach { channel ->
+                    add(buildJsonObject {
+                        put("displayName", channel.displayName)
+                        put("aliases", buildJsonArray { channel.aliases.forEach { add(it) } })
+                        put("regions", buildJsonArray { channel.regions.forEach { add(it) } })
+                        put("tags", buildJsonArray { channel.tags.forEach { add(it) } })
+                    })
+                }
+            })
+        }
+        runCatching { LiveTvPreferences.saveQuickChannelData(json.toString()) }
+    }
+
+    private fun JsonObject.string(key: String): String =
+        (this[key] as? JsonPrimitive)?.contentOrNull.orEmpty()
+
+    private fun JsonObject.strings(key: String): List<String> =
+        (this[key] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty()
 
     fun getChannelCategories(): List<String> = allCategories().map { it.id }
 
-    fun allCategories(): List<QuickCategory> = defaultCategories + _customCategories
+    fun allCategories(): List<QuickCategory> {
+        ensureLoaded()
+        return defaultCategories + _customCategories
+    }
 
     /** Returns true if the category is custom (user-created). */
-    fun isCustomCategory(id: String): Boolean = _customCategories.any { it.id == id }
+    fun isCustomCategory(id: String): Boolean {
+        ensureLoaded()
+        return _customCategories.any { it.id == id }
+    }
 
     /** Adds a new custom category. Returns false if a category with that id already exists. */
     fun addCustomCategory(category: QuickCategory): Boolean {
+        ensureLoaded()
         if (_customCategories.any { it.id == category.id }) return false
         _customCategories.add(category)
+        persist()
         return true
     }
 
     /** Removes a custom category by id. Returns false if not found or not custom. */
     fun removeCustomCategory(id: String): Boolean {
+        ensureLoaded()
         val index = _customCategories.indexOfFirst { it.id == id }
         if (index < 0 || !isCustomCategory(id)) return false
         _customCategories.removeAt(index)
+        persist()
         return true
     }
 
     fun getChannelsForCategory(categoryId: String): List<QuickChannel> {
+        ensureLoaded()
         val norm = categoryId.trim().lowercase().replace("_", "-").replace(" ", "-")
         return when (norm) {
             "all" -> defaultChannels + _customChannels
@@ -89,53 +187,63 @@ object QuickChannelList {
     }
 
     private fun customCatMatches(qc: QuickChannel, categoryId: String): Boolean {
+        ensureLoaded()
         val cat = customCategories.find { it.id == categoryId } ?: return false
         return cat.tags.any { tag -> tag in qc.tags } ||
             qc.regions.any { r -> r.lowercase() == categoryId.replace("-", "") }
     }
 
-    private val _customChannels = mutableListOf<QuickChannel>()
-    val customChannels: List<QuickChannel> get() = _customChannels.toList()
-
     /** Adds a custom quick channel. Returns false if a channel with that display name already exists. */
     fun addCustomChannel(channel: QuickChannel): Boolean {
+        ensureLoaded()
         if (_customChannels.any { it.displayName == channel.displayName } || defaultChannels.any { it.displayName == channel.displayName }) return false
         _customChannels.add(channel)
+        persist()
         return true
     }
 
     /** Removes a custom quick channel by display name. Returns false if not found or not custom. */
     fun removeCustomChannel(displayName: String): Boolean {
+        ensureLoaded()
         val index = _customChannels.indexOfFirst { it.displayName == displayName }
         if (index < 0 || !isCustomChannel(displayName)) return false
         _customChannels.removeAt(index)
+        persist()
         return true
     }
 
     /** Updates an existing custom quick channel. Returns false if not found or not custom. */
     fun updateCustomChannel(oldDisplayName: String, channel: QuickChannel): Boolean {
+        ensureLoaded()
         val index = _customChannels.indexOfFirst { it.displayName == oldDisplayName }
         if (index < 0) return false
         // Don't collide with another custom channel's new display name
         if (channel.displayName != oldDisplayName && _customChannels.any { it.displayName == channel.displayName }) return false
         _customChannels[index] = channel
+        persist()
         return true
     }
 
     /** Updates an existing custom category. Returns false if not found or not custom. */
     fun updateCustomCategory(oldId: String, category: QuickCategory): Boolean {
+        ensureLoaded()
         val index = _customCategories.indexOfFirst { it.id == oldId }
         if (index < 0) return false
         if (category.id != oldId && _customCategories.any { it.id == category.id }) return false
         _customCategories[index] = category
+        persist()
         return true
     }
 
     /** Returns true if the channel is custom (user-created). */
-    fun isCustomChannel(displayName: String): Boolean = _customChannels.any { it.displayName == displayName }
+    fun isCustomChannel(displayName: String): Boolean {
+        ensureLoaded()
+        return _customChannels.any { it.displayName == displayName }
+    }
 
     /** Returns all unique regions used across default + custom channels, sorted, with "CUSTOM" first. */
     fun allRegions(): List<String> {
+        ensureLoaded()
         val regions = mutableSetOf<String>()
         (defaultChannels + _customChannels).forEach { qc ->
             qc.regions.forEach { regions.add(it) }
@@ -159,23 +267,34 @@ object QuickChannelList {
             }
         }
 
-        val keywords = buildSet {
-            addAll(quickChannel.displayName.lowercase().split("\\s+").filter { it.isNotBlank() })
-            addAll(quickChannel.aliases.flatMap { alias -> alias.lowercase().split("\\s+").filter { it.isNotBlank() } })
-            quickChannel.aliases.forEach { alias -> add(alias.lowercase()) }
-            add(quickChannel.displayName.lowercase())
+        // Match whole display names and aliases, not individual words: a keyword like "rt" or
+        // "one" would otherwise match unrelated names such as "Cartoon" or "Money". Punctuation
+        // and spacing are normalised away so "Real America's Voice" still matches
+        // "Real Americas Voice" and "CNN US" matches "CNNUS".
+        val phrases = (listOf(quickChannel.displayName) + quickChannel.aliases)
+            .map { normalizedChannelText(it) }
+            .filter { it.length >= 2 }
+        if (phrases.isEmpty()) return false
+
+        val name = normalizedChannelText(channel.name)
+        val group = normalizedChannelText(channel.group)
+
+        return phrases.any { phrase ->
+            if (phrase.length <= 2) {
+                phrase in channelWordTokens(channel.name) || phrase in channelWordTokens(channel.group)
+            } else {
+                name.contains(phrase) || group.contains(phrase)
+            }
         }
-
-        val nameLower = channel.name.lowercase()
-        val groupLower = channel.group.lowercase()
-
-        if (keywords.any { nameLower.contains(it) }) return true
-
-        val significantKeywords = keywords.filter { it.length >= 2 }
-        if (significantKeywords.any { nameLower.contains(it) || groupLower.contains(it) }) return true
-
-        return false
     }
+
+    /** Lowercase, keep only letters and digits so punctuation/spacing differences do not matter. */
+    private fun normalizedChannelText(value: String): String =
+        value.lowercase().filter { it.isLetterOrDigit() }
+
+    /** Word tokens for short-phrase matching, so "rt" does not match "cartoon". */
+    private fun channelWordTokens(value: String): Set<String> =
+        value.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotBlank() }.toSet()
 
     private val regionUs = listOf("us", "usa", "united states")
     private val regionCa = listOf("ca", "canada", "canadian", "canadien", "canadiens")

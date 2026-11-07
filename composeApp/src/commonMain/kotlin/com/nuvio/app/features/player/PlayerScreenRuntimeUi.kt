@@ -21,8 +21,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.ui.NuvioStatusModal
+import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.core.ui.LocalFold
+import com.nuvio.app.features.livetv.ui.multiview.MultiViewRepository
+import com.nuvio.app.features.livetv.ui.multiview.MultiViewStream
 import com.nuvio.app.features.p2p.P2pStreamingState
 import com.nuvio.app.features.party.PartyRepository
 import com.nuvio.app.features.p2p.formatP2pMegabytes
@@ -31,6 +34,7 @@ import com.nuvio.app.features.player.skip.internalSkipAction
 import com.nuvio.app.features.servers.ServerStreams
 import com.nuvio.app.features.streams.streamAddonInstanceId
 import com.nuvio.app.isIos
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.stringResource
@@ -129,6 +133,28 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
     val playbackGesturesEnabled = initialLoadCompleted && errorMessage == null
 
     BindAutoSyncRuntimeEffects() // AutoSync hook
+
+    // A stream transition stays up until the incoming source is ready, for at least a moment so
+    // the artwork is readable, and never longer than a few seconds if the source never reports
+    // ready (the normal loading/error UI takes over after that).
+    LaunchedEffect(streamTransition, initialLoadCompleted, errorMessage) {
+        val transition = streamTransition ?: return@LaunchedEffect
+        if (errorMessage != null) {
+            streamTransition = null
+            return@LaunchedEffect
+        }
+        val minimumVisibleMs = 1_200L
+        val maximumVisibleMs = 8_000L
+        val elapsedMs = transition.startedAt.elapsedNow().inWholeMilliseconds
+        val targetMs = if (initialLoadCompleted) minimumVisibleMs else maximumVisibleMs
+        val remainingMs = targetMs - elapsedMs
+        if (remainingMs > 0L) delay(remainingMs)
+        if (streamTransition == transition &&
+            (initialLoadCompleted || transition.startedAt.elapsedNow().inWholeMilliseconds >= maximumVisibleMs)
+        ) {
+            streamTransition = null
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -457,6 +483,68 @@ private fun PlayerScreenRuntime.RenderPlayerControls(
                 null
             },
             onStreamInfoClick = { openStreamInfo() },
+            onMultiViewClick = if (activeSourceUrl.isNotBlank()) {
+                {
+                    val added = MultiViewRepository.add(
+                        MultiViewStream(
+                            id = activeSourceUrl,
+                            url = activeSourceUrl,
+                            title = liveTitleOr(title),
+                            subtitle = activeStreamSubtitle,
+                            logo = logo,
+                            headers = activeSourceHeaders,
+                            responseHeaders = activeSourceResponseHeaders,
+                            streamType = activeStreamType,
+                            providerName = activeProviderName,
+                            streamTitle = activeStreamTitle,
+                            parentMetaId = parentMetaId,
+                            parentMetaType = parentMetaType,
+                            videoId = activeVideoId,
+                        ),
+                    )
+                    if (!added) {
+                        val max = MultiViewRepository.maxStreams.value
+                        NuvioToastController.show(
+                            if (MultiViewRepository.streams.value.size >= max) {
+                                "Multi-view is full ($max windows)"
+                            } else {
+                                "Already open in multi-view"
+                            },
+                        )
+                    }
+                }
+            } else {
+                null
+            },
+            onPictureInPictureClick = if (activeSourceUrl.isNotBlank()) {
+                {
+                    flushWatchProgress()
+                    MiniPlayerRepository.show(
+                        MiniPlayerStream(
+                            profileId = profileId,
+                            url = activeSourceUrl,
+                            audioUrl = activeSourceAudioUrl,
+                            headers = activeSourceHeaders,
+                            responseHeaders = activeSourceResponseHeaders,
+                            streamType = activeStreamType,
+                            title = liveTitleOr(title),
+                            subtitle = activeStreamSubtitle,
+                            logo = logo,
+                            providerName = activeProviderName,
+                            streamTitle = activeStreamTitle,
+                            providerAddonId = activeProviderAddonId,
+                            contentType = contentType,
+                            videoId = activeVideoId,
+                            parentMetaId = parentMetaId,
+                            parentMetaType = parentMetaType,
+                            initialPositionMs = playbackSnapshot.positionMs,
+                        ),
+                    )
+                    args.onBack()
+                }
+            } else {
+                null
+            },
             parentalWarnings = parentalWarnings,
             showParentalGuide = showParentalGuide,
             onParentalGuideAnimationComplete = { showParentalGuide = false },
@@ -521,7 +609,8 @@ private fun BoxScope.RenderPlaybackOverlays(
         metrics = metrics,
         horizontalSafePadding = horizontalSafePadding,
         onUnlock = { unlockPlayerControls() },
-        showOpeningOverlay = playerSettingsUiState.showLoadingOverlay && !initialLoadCompleted && errorMessage == null,
+        showOpeningOverlay = playerSettingsUiState.showLoadingOverlay && !initialLoadCompleted && errorMessage == null && streamTransition == null,
+        streamTransition = streamTransition,
         backdropArtwork = background ?: poster,
         logo = logo,
         title = title,

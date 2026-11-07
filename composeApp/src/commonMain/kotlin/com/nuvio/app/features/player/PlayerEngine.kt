@@ -12,6 +12,8 @@ interface PlayerEngineController {
     fun retry()
     fun setPlaybackSpeed(speed: Float)
     fun setMuted(muted: Boolean) {}
+    /** Sets this player's own volume, 0f..1f, independent of the device volume. */
+    fun setVolume(volume: Float) {}
     fun getAudioTracks(): List<AudioTrack>
     fun getSubtitleTracks(): List<SubtitleTrack>
     fun applyAudioLanguagePreferences(languages: List<String>)
@@ -83,6 +85,8 @@ expect fun PlatformPlayerSurface(
     resizeMode: PlayerResizeMode = PlayerResizeMode.Fit,
     playbackEngine: AndroidPlaybackEngine? = null,
     useNativeController: Boolean = false,
+    /** True for panes that must keep playing beside other players (multi-view, in-app PiP). */
+    allowConcurrentAudio: Boolean = false,
     onInitialPositionHandled: (key: String, handled: Boolean) -> Unit = { _, _ -> },
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,

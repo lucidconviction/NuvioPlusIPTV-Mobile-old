@@ -12,7 +12,19 @@ import kotlin.test.assertTrue
 
 class ParentalControlsTest {
     private fun channel(key: String, name: String, group: String) =
-        LiveChannel(key, "pl", "Playlist", name, null, null, null, group, group, 1, "http://h/$key.ts")
+        LiveChannel(
+            key = key,
+            sourceId = "pl",
+            sourceName = "Playlist",
+            name = name,
+            tvgId = null,
+            tvgName = null,
+            logo = null,
+            groupId = group,
+            group = group,
+            number = 1,
+            url = "http://h/$key.ts",
+        )
 
     private val news = channel("news", "BBC News", "News")
     private val adult = channel("xxx1", "Hot Channel", "XXX Adults")

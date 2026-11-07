@@ -7,6 +7,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.nuvio.app.core.ui.NuvioToastController
+import com.nuvio.app.features.addons.AddonCatalog
 import com.nuvio.app.features.party.PartyMedia
 import com.nuvio.app.features.player.ExternalPlayerIntentResult
 import com.nuvio.app.features.player.ExternalPlayerPlatform
@@ -29,6 +30,7 @@ internal fun PlayerDestination(
     openExternalStreamUrl: (String) -> Boolean,
     onOpenPartyMedia: (PartyMedia) -> Unit,
     onQuickChannelsClick: (() -> Unit)? = null,
+    onOpenAddonCatalog: ((manifestUrl: String, catalog: AddonCatalog) -> Unit)? = null,
 ) {
     val onBack = rememberGuardedPopBackStack(navController, route)
     val launch = remember(route.launchId) { PlayerLaunchStore.get(route.launchId) }
@@ -131,6 +133,7 @@ internal fun PlayerDestination(
         },
         onOpenPartyMedia = onOpenPartyMedia,
         onQuickChannelsClick = onQuickChannelsClick,
+        onOpenAddonCatalog = onOpenAddonCatalog,
         modifier = Modifier.fillMaxSize(),
     )
 }

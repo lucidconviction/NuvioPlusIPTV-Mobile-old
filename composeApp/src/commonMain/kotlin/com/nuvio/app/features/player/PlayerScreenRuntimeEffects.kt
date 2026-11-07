@@ -113,6 +113,11 @@ internal fun PlayerScreenRuntime.BindPlayerRuntimeEffects() {
     }
 
     LaunchedEffect(activePlaybackKey, activeSourceUrl, activeSourceAudioUrl, activeSourceHeaders, activeSourceResponseHeaders) {
+        // Keep the incoming artwork on screen while the new source buffers. Only after playback
+        // has started (or when a switch is already in progress) so opening a player is unchanged.
+        if (initialLoadCompleted || streamTransition != null) {
+            streamTransition = incomingStreamTransition()
+        }
         errorMessage = null
         playerController = null
         playerControllerSourceUrl = null

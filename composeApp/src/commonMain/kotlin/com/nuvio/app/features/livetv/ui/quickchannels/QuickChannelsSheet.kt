@@ -78,12 +78,8 @@ fun QuickChannelsSheet(
     var selectedCategory by remember { mutableStateOf(QuickChannelList.getChannelCategories().first()) }
     val categories = QuickChannelList.getChannelCategories()
     var selectedQc by remember { mutableStateOf<QuickChannel?>(null) }
-    var matches by remember { mutableStateOf<List<LiveChannel>>(emptyList()) }
-    var aliveByUrl by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
-    val checked = remember(aliveByUrl) { aliveByUrl.values.count { it } }
-    val unchecked = remember(aliveByUrl) { aliveByUrl.count { it.value == null } }
-    val checking = unchecked > 0
     val liveChannels by LiveTvRepository.channels.collectAsStateWithLifecycle(initialValue = emptyList())
+    val validation = rememberQuickChannelMatchState(selectedQc, liveChannels)
 
     // Custom region/channel management state
     var showAddRegionDialog by remember { mutableStateOf(false) }
@@ -92,24 +88,11 @@ fun QuickChannelsSheet(
     var showEditChannelDialog by remember { mutableStateOf(false) }
     var editingRegion by remember { mutableStateOf<QuickChannelList.QuickCategory?>(null) }
     var editingChannel by remember { mutableStateOf<QuickChannel?>(null) }
+    // Bumped after a custom channel/region is added, edited or deleted so the chip rows update.
+    var quickDataVersion by remember { mutableStateOf(0) }
 
-    val filteredQc = remember(selectedCategory) {
+    val filteredQc = remember(selectedCategory, quickDataVersion) {
         QuickChannelList.getChannelsForCategory(selectedCategory)
-    }
-
-    LaunchedEffect(selectedQc) {
-        if (selectedQc != null) {
-            aliveByUrl = emptyMap()
-            val q = selectedQc!!
-            matches = liveChannels.filter { QuickChannelList.matches(q, it) }
-            if (matches.isNotEmpty()) {
-                val statuses = QuickStreamChecker.checkBatch(matches.map { it.url })
-                aliveByUrl = statuses
-            }
-        } else {
-            matches = emptyList()
-            aliveByUrl = emptyMap()
-        }
     }
 
     NuvioModalBottomSheet(
@@ -136,14 +119,12 @@ fun QuickChannelsSheet(
                     modifier = Modifier.weight(1f),
                 )
                 // Add custom region button
-                IconButton(onClick = { showAddRegionDialog = true }) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Region", tint = tokens.accent)
-                    Text("+Reg", style = MaterialTheme.typography.labelMedium, color = tokens.accent)
+                TextButton(onClick = { showAddRegionDialog = true }) {
+                    Text("+REG", style = MaterialTheme.typography.labelLarge, color = tokens.accent, fontWeight = FontWeight.SemiBold)
                 }
                 // Add custom channel button
-                IconButton(onClick = { showAddChannelDialog = true }) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Channel", tint = tokens.accent)
-                    Text("+CH", style = MaterialTheme.typography.labelMedium, color = tokens.accent)
+                TextButton(onClick = { showAddChannelDialog = true }) {
+                    Text("+CH", style = MaterialTheme.typography.labelLarge, color = tokens.accent, fontWeight = FontWeight.SemiBold)
                 }
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Default.Close, contentDescription = "Close", tint = tokens.textSecondary)
@@ -180,7 +161,7 @@ fun QuickChannelsSheet(
                                 fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
                             )
                             if (isCustom) {
-                                IconButton(onClick = { QuickChannelList.removeCustomCategory(catId); if (selectedCategory == catId) selectedCategory = "all" }, modifier = Modifier.size(18.dp)) {
+                                IconButton(onClick = { QuickChannelList.removeCustomCategory(catId); quickDataVersion += 1; if (selectedCategory == catId) selectedCategory = "all" }, modifier = Modifier.size(18.dp)) {
                                     Icon(Icons.Default.Delete, contentDescription = "Delete", tint = if (isActive) Color.White else tokens.textMuted, modifier = Modifier.size(14.dp))
                                 }
                                 IconButton(onClick = { editingRegion = QuickChannelList.allCategories().find { it.id == catId }; showEditRegionDialog = true }, modifier = Modifier.size(18.dp)) {
@@ -207,8 +188,6 @@ fun QuickChannelsSheet(
                             .clip(RoundedCornerShape(NuvioTokens.Radius.md))
                             .background(if (selectedQc?.displayName == qc.displayName) tokens.accent.copy(alpha = 0.2f) else tokens.surfaceCard)
                             .clickable {
-                                matches = emptyList()
-                                aliveByUrl = emptyMap()
                                 selectedQc = qc
                             }
                             .padding(horizontal = NuvioTokens.Space.s10, vertical = NuvioTokens.Space.s10),
@@ -231,7 +210,7 @@ fun QuickChannelsSheet(
                                     IconButton(onClick = { editingChannel = qc; showEditChannelDialog = true }, modifier = Modifier.size(22.dp)) {
                                         Icon(Icons.Default.Edit, contentDescription = "Edit", tint = tokens.textMuted, modifier = Modifier.size(16.dp))
                                     }
-                                    IconButton(onClick = { QuickChannelList.removeCustomChannel(qc.displayName); if (selectedQc?.displayName == qc.displayName) selectedQc = null }, modifier = Modifier.size(22.dp)) {
+                                    IconButton(onClick = { QuickChannelList.removeCustomChannel(qc.displayName); quickDataVersion += 1; if (selectedQc?.displayName == qc.displayName) selectedQc = null }, modifier = Modifier.size(22.dp)) {
                                         Icon(Icons.Default.Delete, contentDescription = "Delete", tint = tokens.textMuted, modifier = Modifier.size(16.dp))
                                     }
                                 }
@@ -242,7 +221,7 @@ fun QuickChannelsSheet(
             }
 
             // Match list
-            if (selectedQc != null && matches.isNotEmpty()) {
+            if (selectedQc != null && validation.matches.isNotEmpty()) {
                 Spacer(Modifier.height(NuvioTokens.Space.s6))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -255,7 +234,7 @@ fun QuickChannelsSheet(
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f),
                     )
-                    if (checking) {
+                    if (validation.isChecking) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(14.dp),
                             color = tokens.accent,
@@ -265,35 +244,41 @@ fun QuickChannelsSheet(
                     }
                     // Show only working streams count
                     Text(
-                        "$checked working",
+                        "${validation.workingCount} working",
                         style = MaterialTheme.typography.labelSmall,
                         color = tokens.textMuted,
                     )
                 }
                 Spacer(Modifier.height(NuvioTokens.Space.s8))
-                // Sort: working (true) first, then null (checking), then false (not working - hidden)
-                val sortedMatches = matches.sortedWith(
-                    compareByDescending<LiveChannel> { ch -> aliveByUrl[ch.url] == true }
-                        .thenByDescending { ch -> aliveByUrl[ch.url] == null }
-                ).filter { ch -> aliveByUrl[ch.url] != false } // Hide non-working streams
-                
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s6),
-                    modifier = Modifier.heightIn(max = 380.dp),
-                ) {
-                    items(sortedMatches, key = { it.key }) { ch ->
-                        val isAlive = aliveByUrl[ch.url]
-                        QuickChannelRow(
-                            channel = ch,
-                            isAlive = isAlive,
-                            onTap = {
-                                onPlayChannel(ch)
-                                onDismiss()
-                            },
-                        )
+                // Working streams first, then streams still being checked; dead ones are hidden.
+                val sortedMatches = validation.visibleMatches
+
+                if (sortedMatches.isEmpty() && !validation.isChecking) {
+                    Text(
+                        "No working streams found for ${selectedQc!!.displayName}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = tokens.textMuted,
+                        modifier = Modifier.padding(vertical = NuvioTokens.Space.s8),
+                    )
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s6),
+                        modifier = Modifier.heightIn(max = 380.dp),
+                    ) {
+                        items(sortedMatches, key = { it.key }) { ch ->
+                            val isAlive = validation.statuses[ch.url]
+                            QuickChannelRow(
+                                channel = ch,
+                                isAlive = isAlive,
+                                onTap = {
+                                    onPlayChannel(ch)
+                                    onDismiss()
+                                },
+                            )
+                        }
                     }
                 }
-            } else if (selectedQc != null && matches.isEmpty() && aliveByUrl.isNotEmpty()) {
+            } else if (selectedQc != null && liveChannels.isNotEmpty()) {
                 Spacer(Modifier.height(NuvioTokens.Space.s24))
                 Text(
                     "No matching channels found for ${selectedQc!!.displayName}",
@@ -325,6 +310,7 @@ fun QuickChannelsSheet(
                     tags = tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
                 )
                 QuickChannelList.addCustomCategory(category)
+                quickDataVersion += 1
                 showAddRegionDialog = false
             },
         )
@@ -343,6 +329,7 @@ fun QuickChannelsSheet(
                     tags = tags.split(",").map { it.trim().lowercase() }.filter { it.isNotBlank() }
                 )
                 QuickChannelList.addCustomChannel(channel)
+                quickDataVersion += 1
                 showAddChannelDialog = false
             },
         )
@@ -362,6 +349,7 @@ fun QuickChannelsSheet(
                     tags = tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
                 )
                 QuickChannelList.updateCustomCategory(region.id, category)
+                quickDataVersion += 1
                 showEditRegionDialog = false
                 editingRegion = null
             },
@@ -383,6 +371,7 @@ fun QuickChannelsSheet(
                     tags = tags.split(",").map { it.trim().lowercase() }.filter { it.isNotBlank() }
                 )
                 QuickChannelList.updateCustomChannel(channel.displayName, updated)
+                quickDataVersion += 1
                 showEditChannelDialog = false
                 editingChannel = null
             },

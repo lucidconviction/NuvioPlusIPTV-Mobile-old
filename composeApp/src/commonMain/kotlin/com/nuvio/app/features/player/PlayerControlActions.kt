@@ -20,10 +20,12 @@ import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.automirrored.rounded.Toc
 import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LockOpen
+import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.SwapHoriz
@@ -120,6 +122,8 @@ internal fun PlayerControlActions(
     onVideoSettingsClick: (() -> Unit)?,
     onOpenInExternalPlayer: (() -> Unit)?,
     onStreamInfoClick: () -> Unit,
+    onMultiViewClick: (() -> Unit)? = null,
+    onPictureInPictureClick: (() -> Unit)? = null,
     onSubmitIntroClick: (() -> Unit)?,
     onInteraction: () -> Unit,
 ) {
@@ -137,6 +141,8 @@ internal fun PlayerControlActions(
         onVideoSettingsClick = onVideoSettingsClick,
         onOpenInExternalPlayer = onOpenInExternalPlayer,
         onStreamInfoClick = onStreamInfoClick,
+        onMultiViewClick = onMultiViewClick,
+        onPictureInPictureClick = onPictureInPictureClick,
         onSubmitIntroClick = onSubmitIntroClick,
     )
     val hasOverflow = actions.size > 5
@@ -238,6 +244,8 @@ internal fun playerControlActions(
     onVideoSettingsClick: (() -> Unit)?,
     onOpenInExternalPlayer: (() -> Unit)?,
     onStreamInfoClick: () -> Unit,
+    onMultiViewClick: (() -> Unit)? = null,
+    onPictureInPictureClick: (() -> Unit)? = null,
     onSubmitIntroClick: (() -> Unit)?,
 ): List<PlayerControlAction> =
     listOfNotNull(
@@ -291,6 +299,18 @@ internal fun playerControlActions(
             stringResource(Res.string.cd_stream_info), onStreamInfoClick,
             icon = Icons.Rounded.Info,
         ),
+        onMultiViewClick?.let {
+            PlayerControlAction(
+                "Multi-view", it,
+                icon = Icons.Rounded.GridView,
+            )
+        },
+        onPictureInPictureClick?.let {
+            PlayerControlAction(
+                "Picture in picture", it,
+                icon = Icons.Rounded.PictureInPictureAlt,
+            )
+        },
         onVideoSettingsClick?.let {
             PlayerControlAction(
                 stringResource(Res.string.player_action_video_settings), it,

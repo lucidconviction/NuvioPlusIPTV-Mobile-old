@@ -80,6 +80,7 @@ class PlayerNextEpisodeTransitionTest {
                         horizontalSafePadding = 0.dp,
                         onUnlock = {},
                         showOpeningOverlay = false,
+                        streamTransition = null,
                         backdropArtwork = null,
                         logo = null,
                         title = "Series",

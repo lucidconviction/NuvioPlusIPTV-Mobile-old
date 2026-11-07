@@ -132,6 +132,7 @@ internal data class AppTabActions(
     val onLiveTvOnDemandClick: () -> Unit = {},
     val onLiveTvRecordingsClick: () -> Unit = {},
     val onLiveTvSportsClick: () -> Unit = {},
+    val onLiveTvMultiViewClick: () -> Unit = {},
     val onLiveTvManageClick: () -> Unit = {},
     val onLiveTvOpenAddonCatalog: (manifestUrl: String, catalog: com.nuvio.app.features.addons.AddonCatalog) -> Unit = { _, _ -> },
     val onLiveTvOpenAddonSettings: () -> Unit = {},
@@ -216,8 +217,10 @@ internal fun AppTabHost(
                     onOpenOnDemand = actions.onLiveTvOnDemandClick,
                     onOpenRecordings = actions.onLiveTvRecordingsClick,
                     onOpenSports = actions.onLiveTvSportsClick,
+                    onOpenMultiView = actions.onLiveTvMultiViewClick,
                     onOpenManage = actions.onLiveTvManageClick,
                     onOpenAddonCatalog = actions.onLiveTvOpenAddonCatalog,
+                    onCatalogItemClick = { item -> actions.onPosterClick?.invoke(item) },
                     onOpenAddonSettings = actions.onLiveTvOpenAddonSettings,
                 )
             }

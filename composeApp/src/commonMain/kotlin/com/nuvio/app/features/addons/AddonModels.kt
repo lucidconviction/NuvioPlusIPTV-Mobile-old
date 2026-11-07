@@ -92,6 +92,28 @@ internal fun List<ManagedAddon>.toOverview(): AddonOverview =
 internal fun List<ManagedAddon>.enabledAddons(): List<ManagedAddon> =
     filter { it.enabled }
 
+private val liveTvTypeTokens = setOf("live", "livetv", "iptv", "channel", "channels", "stream", "streams")
+private val liveTvNamePattern = Regex("(live|iptv|channel|channels)", RegexOption.IGNORE_CASE)
+
+/**
+ * Whether this add-on offers live television. Stremio manifests have no dedicated live type, so
+ * this accepts the live/IPTV type names some providers use and catalog ids or names that say so;
+ * ordinary movie and series add-ons are left out of Live TV.
+ */
+fun ManagedAddon.hasLiveTvContent(): Boolean {
+    if (!enabled) return false
+    val manifest = manifest ?: return false
+    if (manifest.types.any { it.lowercase() in liveTvTypeTokens }) return true
+    return manifest.catalogs.any { catalog ->
+        catalog.type.lowercase() in liveTvTypeTokens ||
+            liveTvNamePattern.containsMatchIn(catalog.id) ||
+            liveTvNamePattern.containsMatchIn(catalog.name)
+    }
+}
+
+internal fun List<ManagedAddon>.liveTvAddons(): List<ManagedAddon> =
+    filter { it.hasLiveTvContent() }
+
 internal fun List<ManagedAddon>.hasPendingEnabledManifests(): Boolean =
     any { addon -> addon.enabled && addon.isRefreshing }
 

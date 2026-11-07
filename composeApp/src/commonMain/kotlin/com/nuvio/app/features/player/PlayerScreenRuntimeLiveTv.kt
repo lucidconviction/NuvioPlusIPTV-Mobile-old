@@ -26,6 +26,9 @@ internal fun PlayerScreenRuntime.liveLogoOr(fallback: String?): String? {
 /** Changes channel in place (the channel panel or a swipe), keeping the player open. */
 internal fun PlayerScreenRuntime.switchLiveChannel(channel: LiveChannel, nowTitle: String?) {
     if (channel.key == activeVideoId && LiveTvPlayback.owns(activeProviderAddonId) && errorMessage == null) return
+    // A channel switch always wins over a slow add-on catalog lookup.
+    addonCatalogPlayJob?.cancel()
+    addonCatalogPlayJob = null
     val req = LiveTvPlayback.switchTo(channel)
     flushWatchProgress()
     credentialRefreshJob?.cancel()
@@ -49,6 +52,23 @@ internal fun PlayerScreenRuntime.switchLiveChannel(channel: LiveChannel, nowTitl
     activeInitialProgressFraction = null
 }
 
+/** The artwork/logo/title of the source being tuned in, used by the stream transition overlay. */
+internal fun PlayerScreenRuntime.incomingStreamTransition(): PlayerStreamTransition {
+    val channel = if (isLiveTv) {
+        val key = activeVideoId
+        key?.let { LiveTvViewState.list.value.visible.firstOrNull { channel -> channel.key == key } }
+    } else {
+        null
+    }
+    return PlayerStreamTransition(
+        artwork = channel?.thumbnail?.takeIf { it.isNotBlank() }
+            ?: channel?.logo?.takeIf { it.isNotBlank() }
+            ?: background ?: poster,
+        logo = channel?.logo?.takeIf { it.isNotBlank() } ?: logo,
+        title = channel?.name ?: activeStreamTitle.takeIf { it.isNotBlank() } ?: title,
+    )
+}
+
 /** The channel panel and channel swiping, over a playing Live TV channel. */
 @Composable
 internal fun PlayerScreenRuntime.RenderLiveTvChannels() {
@@ -60,5 +80,9 @@ internal fun PlayerScreenRuntime.RenderLiveTvChannels() {
         enabled = !isInPip && !playerControlsLocked,
         onPanelOpened = { controlsVisible = false },
         onSwitch = { channel, nowTitle -> switchLiveChannel(channel, nowTitle) },
+        onOpenAddonCatalog = { manifestUrl, catalog -> args.onOpenAddonCatalog?.invoke(manifestUrl, catalog) },
+        onPlayAddonCatalogItem = { item, addon, onFinished ->
+            playAddonCatalogItem(item, addon, onFinished)
+        },
     )
 }

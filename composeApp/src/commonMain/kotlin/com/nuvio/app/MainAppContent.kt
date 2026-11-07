@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -42,6 +43,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.NavKey
@@ -147,6 +149,9 @@ import com.nuvio.app.features.livetv.ui.OnDemandScreen
 import com.nuvio.app.features.livetv.ui.OnDemandSeeAllScreen
 import com.nuvio.app.features.livetv.ui.RecordingsScreen
 import com.nuvio.app.features.livetv.ui.LiveTvManageScreen
+import com.nuvio.app.features.livetv.ui.multiview.LiveTvMultiViewScreen
+import com.nuvio.app.features.livetv.ui.multiview.MultiViewQuickNavBadge
+import com.nuvio.app.features.livetv.ui.multiview.MultiViewRepository
 import com.nuvio.app.features.livetv.ui.sports.SportsActions
 import com.nuvio.app.features.livetv.ui.sports.SportsGameScreen
 import com.nuvio.app.features.livetv.ui.sports.SportsLeagueScreen
@@ -158,6 +163,10 @@ import com.nuvio.app.features.livetv.record.LiveTvRecorder
 import com.nuvio.app.features.livetv.record.LiveTvRecording
 import com.nuvio.app.features.player.PlayerLaunch
 import com.nuvio.app.features.player.PlayerLaunchStore
+import com.nuvio.app.features.player.MiniPlayerHost
+import com.nuvio.app.features.player.MiniPlayerRepository
+import com.nuvio.app.features.player.MiniPlayerStream
+import com.nuvio.app.features.player.toPlayerLaunch
 import com.nuvio.app.features.player.PlayerSettingsRepository
 import com.nuvio.app.features.player.SubtitleLanguageOption
 import com.nuvio.app.features.player.prepareExternalPlayerLaunch
@@ -293,6 +302,10 @@ internal fun MainAppContent(
         val liveTvScrollToTopRequests = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
         val settingsRootActionRequests = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
         val currentRoute = navBackStack.lastOrNull() as? AppRoute
+        // The mini player hands back to the full player when one opens.
+        LaunchedEffect(currentRoute) {
+            if (currentRoute is PlayerRoute) MiniPlayerRepository.hide()
+        }
         LaunchedEffect(currentRoute, posterNavigationEnabled) {
             val request = posterNavigation.active
             if (!posterNavigationEnabled || (request != null && currentRoute != request.to)) posterNavigation.clear()
@@ -1632,6 +1645,7 @@ internal fun MainAppContent(
                                 onLiveTvRecordingsClick = { navController.navigate(LiveTvRecordingsRoute(liveTvRecordingsTitle)) },
                                 onLiveTvGuideClick = { navController.navigate(LiveTvGuideRoute(liveTvGuideTitle)) },
                                 onLiveTvSportsClick = { navController.navigate(LiveTvSportsRoute(liveTvSportsTitle)) },
+                                onLiveTvMultiViewClick = { navController.navigate(LiveTvMultiViewRoute()) { launchSingleTop = true } },
                                 onLiveTvManageClick = { navController.navigate(LiveTvManageRoute(liveTvManageTitle)) },
                                 onLiveTvOpenAddonCatalog = openAddonCatalogAction,
                                 onLiveTvOpenAddonSettings = { navController.navigate(AddonsSettingsRoute(addonsSettingsTitle)) },
@@ -1747,6 +1761,7 @@ internal fun MainAppContent(
                         launchExternalPlayer = launchExternalPlayer,
                         openExternalStreamUrl = ::openExternalStreamUrl,
                         onOpenPartyMedia = ::openPartyMedia,
+                        onOpenAddonCatalog = openAddonCatalogAction,
                     )
                 }
                 entry<CatalogRoute> { route ->
@@ -1805,6 +1820,10 @@ internal fun MainAppContent(
                 entry<LiveTvManageRoute> { route ->
                     val onBack = rememberGuardedPopBackStack(navController, route)
                     LiveTvManageScreen(onBack = onBack, modifier = Modifier.fillMaxSize())
+                }
+                entry<LiveTvMultiViewRoute> { route ->
+                    val onBack = rememberGuardedPopBackStack(navController, route)
+                    LiveTvMultiViewScreen(onBack = onBack, modifier = Modifier.fillMaxSize())
                 }
                 entry<LiveTvSportsRoute> { route ->
                     val onBack = rememberGuardedPopBackStack(navController, route)
@@ -2293,6 +2312,37 @@ internal fun MainAppContent(
                     profileSwitchLoading = false
                 }
             }
+
+            // Multi-view stays one tap away while any stream is open, over every screen,
+            // including the player.
+            val multiViewStreams by MultiViewRepository.streams.collectAsStateWithLifecycle()
+            if (multiViewStreams.isNotEmpty() && currentRoute !is LiveTvMultiViewRoute) {
+                MultiViewQuickNavBadge(
+                    count = multiViewStreams.size,
+                    onClick = {
+                        navController.navigate(LiveTvMultiViewRoute()) { launchSingleTop = true }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .navigationBarsPadding()
+                        .padding(end = 16.dp, bottom = 96.dp)
+                        .zIndex(18f),
+                )
+            }
+
+            // In-app picture-in-picture: keeps one stream playing over every screen.
+            MiniPlayerHost(
+                onExpand = { stream ->
+                    MiniPlayerRepository.hide()
+                    val launchId = PlayerLaunchStore.put(stream.toPlayerLaunch())
+                    navController.navigate(PlayerRoute(launchId = launchId, title = stream.title))
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(end = 16.dp, bottom = 158.dp)
+                    .zIndex(17f),
+            )
 
             NuvioFloatingPrompt(
                 visible = resumePromptItem != null,

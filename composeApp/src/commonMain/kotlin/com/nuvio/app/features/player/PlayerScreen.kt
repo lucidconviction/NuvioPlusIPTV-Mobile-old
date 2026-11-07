@@ -3,6 +3,7 @@ package com.nuvio.app.features.player
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
+import com.nuvio.app.features.addons.AddonCatalog
 import com.nuvio.app.features.party.PartyMedia
 
 @Composable
@@ -25,6 +26,7 @@ fun PlayerScreen(
     onOpenExternalUrl: ((String) -> Unit)? = null,
     onOpenPartyMedia: (PartyMedia) -> Unit = {},
     onQuickChannelsClick: (() -> Unit)? = null,
+    onOpenAddonCatalog: ((manifestUrl: String, catalog: AddonCatalog) -> Unit)? = null,
     modifier: Modifier = Modifier,
     logo: String? = null,
     poster: String? = null,
@@ -96,6 +98,7 @@ fun PlayerScreen(
             onOpenPartyMedia = onOpenPartyMedia,
             stream = stream,
             onQuickChannelsClick = onQuickChannelsClick,
+            onOpenAddonCatalog = onOpenAddonCatalog,
         )
     )
 }

@@ -2,7 +2,6 @@ package com.nuvio.app.features.livetv.ui.quickchannels
 
 import com.nuvio.app.core.network.createApiHttpClient
 import io.ktor.client.HttpClient
-import io.ktor.client.plugins.timeout
 import io.ktor.client.request.header
 import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.bodyAsChannel
@@ -12,19 +11,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import java.io.IOException
 
 /**
- * Lightweight stream liveness probe used by [QuickChannelsSheet].
+ * Lightweight stream liveness probe used by the Quick Channels screens.
  *
- * Tries a Range request (bytes=0-1023) first, falls back to a full HEAD-less GET. Reads the
- * first [SAMPLE_SIZE] bytes and rejects HTML-like responses, dead-page tokens, or timeouts.
- * Results are cached in-memory for [TTL_MS] so repeated open/close of the sheet does not
- * re-probe every URL immediately.
+ * Tries a Range request (bytes=0-1023) first, falls back to a plain GET when the server answers
+ * with an empty body. Reads the first [SAMPLE_SIZE] bytes and rejects HTML-like responses,
+ * dead-page tokens, or timeouts. Results are cached in-memory for [TTL_MS] so repeated open/close
+ * of the sheet does not re-probe every URL immediately.
  */
 internal object QuickStreamChecker {
 
@@ -50,41 +50,50 @@ internal object QuickStreamChecker {
     private data class Entry(val alive: Boolean, val checkedAt: Long)
 
     private val cache = mutableMapOf<String, Entry>()
+    private val cacheLock = Mutex()
 
+    /**
+     * Probes every URL in [urls] and returns the final status for each distinct URL.
+     * [onResult] is invoked as each URL finishes checking (including cached results), so callers
+     * can show progress instead of waiting for the whole batch.
+     */
     suspend fun checkBatch(
         urls: List<String>,
-        onProgress: (checked: Int, total: Int) -> Unit = { _, _ -> },
+        onResult: (url: String, alive: Boolean) -> Unit = { _, _ -> },
     ): Map<String, Boolean> {
-        val semaphore = Semaphore(MAX_CONCURRENCY)
-        if (urls.isEmpty()) return emptyMap()
+        val uniqueUrls = urls.filter { it.isNotBlank() }.distinct()
+        if (uniqueUrls.isEmpty()) return emptyMap()
+
         val results = mutableMapOf<String, Boolean>()
+        val resultsLock = Mutex()
+        val semaphore = Semaphore(MAX_CONCURRENCY)
         coroutineScope {
-            urls.forEach { url ->
+            uniqueUrls.forEach { url ->
                 launch {
-                    val allowed = semaphore.withPermit { checkUrl(url) }
-                    results[url] = allowed
-                    onProgress(urls.indexOf(url) + 1, urls.size)
+                    val alive = semaphore.withPermit { checkUrl(url) }
+                    resultsLock.withLock { results[url] = alive }
+                    onResult(url, alive)
                 }
             }
         }
-        return results
+        return results.toMap()
     }
 
-    private suspend fun <T> runBlockingCached(block: suspend () -> T): T = block()
-
     suspend fun checkUrl(url: String): Boolean {
+        if (url.isBlank()) return false
         val now = System.currentTimeMillis()
-        val cached = cache[url]
+        val cached = cacheLock.withLock { cache[url] }
         if (cached != null && now - cached.checkedAt < TTL_MS) return cached.alive
         val alive = probe(url)
-        cache[url] = Entry(alive, now)
+        cacheLock.withLock { cache[url] = Entry(alive, now) }
         return alive
     }
 
     private suspend fun probe(url: String): Boolean {
-        val sample = probeSample(url, "bytes=0-${SAMPLE_SIZE - 1}")
-            ?: probeSample(url, null)
-            ?: return false
+        val ranged = probeSample(url, "bytes=0-${SAMPLE_SIZE - 1}")
+            ?.takeIf { it.isNotBlank() }
+        // Some servers answer a Range request with an empty body even when the stream works.
+        val sample = ranged ?: probeSample(url, null)?.takeIf { it.isNotBlank() } ?: return false
         return looksAlive(sample)
     }
 
@@ -115,10 +124,16 @@ internal object QuickStreamChecker {
         }.getOrNull()
     }
 
-    private fun looksAlive(sample: String): Boolean {
+    /**
+     * A payload that starts with an HLS/DASH manifest header is a live stream even if it carries
+     * words like "error" or an expiry timestamp further down. Anything else is treated as a dead
+     * page when it looks like HTML or contains a known error token.
+     */
+    internal fun looksAlive(sample: String): Boolean {
         val trimmed = sample.trimStart('\uFEFF', ' ', '\t', '\r', '\n')
         if (trimmed.isEmpty()) return false
         val lower = trimmed.lowercase()
+        if (lower.startsWith("#extm3u")) return true
         if (htmlPagePrefixes.any { lower.startsWith(it) }) return false
         val check = trimmed.take(256)
         if (deadPageTokens.any { check.contains(it, ignoreCase = true) }) return false
@@ -126,6 +141,6 @@ internal object QuickStreamChecker {
     }
 
     fun clearCache() {
-        cache.clear()
+        scope.launch { cacheLock.withLock { cache.clear() } }
     }
 }

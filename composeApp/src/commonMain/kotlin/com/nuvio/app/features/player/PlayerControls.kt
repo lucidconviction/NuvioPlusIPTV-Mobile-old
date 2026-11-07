@@ -127,6 +127,8 @@ internal fun PlayerControlsShell(
     onSubmitIntroClick: (() -> Unit)? = null,
     onSwitchEngineClick: (() -> Unit)? = null,
     onStreamInfoClick: () -> Unit = {},
+    onMultiViewClick: (() -> Unit)? = null,
+    onPictureInPictureClick: (() -> Unit)? = null,
     parentalWarnings: List<ParentalWarning> = emptyList(),
     showParentalGuide: Boolean = false,
     onParentalGuideAnimationComplete: () -> Unit = {},
@@ -380,6 +382,8 @@ internal fun PlayerControlsShell(
                         onVideoSettingsClick = onVideoSettingsClick,
                         onOpenInExternalPlayer = onOpenInExternalPlayer,
                         onStreamInfoClick = onStreamInfoClick,
+                        onMultiViewClick = onMultiViewClick,
+                        onPictureInPictureClick = onPictureInPictureClick,
                         onSubmitIntroClick = onSubmitIntroClick,
                         onInteraction = onInteraction,
                     )

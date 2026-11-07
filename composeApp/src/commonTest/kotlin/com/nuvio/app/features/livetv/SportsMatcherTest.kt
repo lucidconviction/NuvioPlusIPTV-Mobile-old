@@ -22,7 +22,19 @@ class SportsMatcherTest {
     private val kickoff = now + hour
 
     private fun channel(key: String, name: String, group: String = "Sports") =
-        LiveChannel(key, "pl", "Playlist", name, null, null, null, "pl::$group", group, 1, "http://h/$key.ts")
+        LiveChannel(
+            key = key,
+            sourceId = "pl",
+            sourceName = "Playlist",
+            name = name,
+            tvgId = null,
+            tvgName = null,
+            logo = null,
+            groupId = "pl::$group",
+            group = group,
+            number = 1,
+            url = "http://h/$key.ts",
+        )
 
     private fun team(id: String, name: String, location: String, abbr: String) =
         TeamInfo("football/nfl", id, name, "$location $name", abbr, location, null, null, null)

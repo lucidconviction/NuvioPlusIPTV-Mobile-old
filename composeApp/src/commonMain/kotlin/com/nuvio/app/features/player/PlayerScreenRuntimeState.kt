@@ -23,6 +23,18 @@ import com.nuvio.app.features.watchprogress.WatchProgressUiState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlin.time.TimeMark
+import kotlin.time.TimeSource
+
+/**
+ * Overlay state for the brief "tuning in" screen shown while the player switches to another
+ * channel/stream. It shows the incoming artwork so the transition is not a black frame.
+ */
+internal data class PlayerStreamTransition(
+    val artwork: String?,
+    val logo: String?,
+    val title: String?,
+    val startedAt: TimeMark = TimeSource.Monotonic.markNow(),
+)
 
 /**
  * Audio/subtitle selection captured right before the playback engine changes, together with the
@@ -167,6 +179,8 @@ internal class PlayerScreenRuntime(
     var seekProgressSyncJob by mutableStateOf<Job?>(null)
     var accumulatedSeekState by mutableStateOf<PlayerAccumulatedSeekState?>(null)
     var initialLoadCompleted by mutableStateOf(false)
+    /** Incoming artwork shown while the player switches channel/stream; null when idle. */
+    var streamTransition by mutableStateOf<PlayerStreamTransition?>(null)
     var speedBoostRestoreSpeed by mutableStateOf<Float?>(null)
     var isHoldToSpeedGestureActive by mutableStateOf(false)
     var initialSeekApplied by mutableStateOf(
@@ -218,6 +232,8 @@ internal class PlayerScreenRuntime(
     var nextEpisodeAutoPlayAutomatic by mutableStateOf(false)
     var nextEpisodePreloadJob by mutableStateOf<Job?>(null)
     var nextEpisodePreloadTriggered by mutableStateOf(false)
+    /** Streams lookup for an add-on catalog item selected inside the channel panel. */
+    var addonCatalogPlayJob by mutableStateOf<Job?>(null)
     var pendingP2pSwitch by mutableStateOf<PendingPlayerP2pSwitch?>(null)
     var credentialRefreshJob by mutableStateOf<Job?>(null)
     var credentialRefreshAttemptedSourceUrl by mutableStateOf<String?>(null)

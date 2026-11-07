@@ -50,8 +50,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -62,6 +60,7 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Schedule
@@ -140,13 +139,14 @@ import com.nuvio.app.features.livetv.sports.GameState
 import com.nuvio.app.core.ui.NuvioBottomSheetActionRow
 import com.nuvio.app.features.addons.AddonRepository
 import com.nuvio.app.features.addons.ManagedAddon
+import com.nuvio.app.features.addons.liveTvAddons
 import com.nuvio.app.features.catalog.CatalogUiState
 import com.nuvio.app.features.catalog.fetchCatalogPage
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.livetv.ui.addonscatalog.AddonCatalogScreen
 import com.nuvio.app.features.livetv.ui.quickchannels.QuickChannelList
 import com.nuvio.app.features.livetv.ui.quickchannels.QuickChannel
-import com.nuvio.app.features.livetv.ui.quickchannels.QuickStreamChecker
+import com.nuvio.app.features.livetv.ui.quickchannels.rememberQuickChannelMatchState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -209,6 +209,8 @@ fun LiveTvScreen(
     onOpenRecordings: () -> Unit = {},
     /** Opens the Sports hub. */
     onOpenSports: () -> Unit = {},
+    /** Opens the multi-view page. */
+    onOpenMultiView: () -> Unit = {},
     /** Opens Manage (reorder and show or hide groups and channels). */
     onOpenManage: () -> Unit = {},
     /** Opens an add-on catalog. */
@@ -229,9 +231,6 @@ fun LiveTvScreen(
     }
     val playlists by LiveTvPreferences.playlists.collectAsStateWithLifecycle()
     val savedPlaylist by PlaylistFilter.selected.collectAsStateWithLifecycle()
-    // Add-on state for playlist dropdown integration
-    val addonUiState by AddonRepository.uiState.collectAsStateWithLifecycle()
-    val addons = addonUiState.addons
     val hasOnDemand by OnDemandRepository.hasContent.collectAsStateWithLifecycle()
     val showOnDemand = hasOnDemand || playlists.any { it.enabled && it.importVod }
     val recordings by remember { LiveTvRecordingScheduler.start(); LiveTvRecorder.recordings }.collectAsStateWithLifecycle()
@@ -276,32 +275,17 @@ fun LiveTvScreen(
     }
 
     // Playlist dropdown: only playlists that have groups here; hidden with fewer than two.
-    val playlistChoices = remember(state.sections, playlists, addons) {
-        val baseChoices = playlists.mapNotNull { p ->
+    val playlistChoices = remember(state.sections, playlists) {
+        playlists.mapNotNull { p ->
             val n = state.sections.count { it.group.sourceId == p.id }
             if (n > 0) PlaylistChoice(p.id, p.name, if (n == 1) "1 group" else "$n groups") else null
         }
-        // Add addon entries as special playlist choices (prefixed with "addon:")
-        val addonChoices = addons.filter { it.manifest != null && it.manifest!!.catalogs.isNotEmpty() }.map { addon ->
-            val manifest = addon.manifest!!
-            PlaylistChoice("addon:${addon.manifestUrl}", manifest.name, "${manifest.catalogs.size} catalog${if (manifest.catalogs.size != 1) "s" else ""}")
-        }
-        baseChoices + addonChoices
     }
     val playlistId = PlaylistFilter.effective(savedPlaylist, playlistChoices.map { it.id })
-    // Check if selected playlist is an addon
-    val selectedAddonManifestUrl = playlistId?.takeIf { it.startsWith("addon:") }?.removePrefix("addon:")
-    val playlistNames = remember(playlists, addons) {
-        playlists.associate { it.id to it.name } + addons.associate { it.manifestUrl to (it.displayTitle) }
-    }
+    val playlistNames = remember(playlists) { playlists.associate { it.id to it.name } }
     val sections = remember(state.sections, playlistId) {
         if (playlistId == null) state.sections
-        else if (playlistId.startsWith("addon:")) {
-            // When an addon is selected, show all sections (like "All playlists") but indicate addon is active
-            state.sections
-        } else {
-            state.sections.filter { it.group.sourceId == null || it.group.sourceId == playlistId }
-        }
+        else state.sections.filter { it.group.sourceId == null || it.group.sourceId == playlistId }
     }
 
     val searchResults by remember(state.visible, query, playlistId) {
@@ -372,6 +356,7 @@ fun LiveTvScreen(
                         add(HeaderAction(Icons.Filled.CalendarViewDay, stringResource(Res.string.livetv_guide), tokens.colors.textPrimary, short = stringResource(Res.string.livetv_header_guide)) { onOpenGuide() })
                         if (showOnDemand) add(HeaderAction(Icons.Filled.Movie, stringResource(Res.string.livetv_on_demand), tokens.colors.textPrimary, short = stringResource(Res.string.livetv_on_demand)) { onOpenOnDemand() })
                         if (sportsOn) add(HeaderAction(Icons.Filled.SportsSoccer, stringResource(Res.string.livetv_sports), tokens.colors.textPrimary, short = stringResource(Res.string.livetv_sports)) { onOpenSports() })
+                        add(HeaderAction(Icons.Filled.GridView, "Multi-view", tokens.colors.textPrimary, short = "Multi-view") { onOpenMultiView() })
                         if (showRecordings) add(HeaderAction(Icons.Filled.FiberManualRecord, stringResource(Res.string.livetv_recordings), if (recordings.any { it.isRecording }) tokens.colors.danger else tokens.colors.textPrimary, short = stringResource(Res.string.livetv_recordings)) { onOpenRecordings() })
                         add(HeaderAction(Icons.Filled.Settings, stringResource(Res.string.livetv_settings), tokens.colors.textPrimary, short = stringResource(Res.string.livetv_header_settings)) { onOpenSettings() })
                     }
@@ -392,26 +377,6 @@ fun LiveTvScreen(
                     Row(modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp).padding(bottom = NuvioTokens.Space.s4)) {
                         headerActions.forEach { a -> HeaderButton(a, Modifier.weight(1f)) }
                     }
-                    PlaylistDropdown(
-                        choices = playlistChoices,
-                        selectedId = playlistId,
-                        allDetail = (state.sections.count { it.group.sourceId != null }).let { if (it == 1) "1 group" else "$it groups" },
-                        onSelect = { id ->
-                            if (id != null && id.startsWith("addon:")) {
-                                // Open the addon catalog when an addon playlist is selected
-                                val manifestUrl = id.removePrefix("addon:")
-                                val addon = addons.find { it.manifestUrl == manifestUrl }
-                                if (addon != null && addon.manifest != null && addon.manifest!!.catalogs.isNotEmpty()) {
-                                    onOpenAddonCatalog(manifestUrl, addon.manifest!!.catalogs.first())
-                                } else {
-                                    PlaylistFilter.select(id)
-                                }
-                            } else {
-                                PlaylistFilter.select(id)
-                            }
-                        },
-                        modifier = Modifier.padding(bottom = NuvioTokens.Space.s8),
-                    )
                     AnimatedVisibility(visible = searching) {
                         NuvioInputField(
                             value = query,
@@ -469,6 +434,16 @@ fun LiveTvScreen(
                 item {
                     QuickChannelsInlineSection(
                         onPlayChannel = { ch -> onPlayChannel(ch, null) },
+                    )
+                }
+                // The playlist picker sits directly under Quick Channels.
+                item(key = "playlist-dropdown") {
+                    PlaylistDropdown(
+                        choices = playlistChoices,
+                        selectedId = playlistId,
+                        allDetail = (state.sections.count { it.group.sourceId != null }).let { if (it == 1) "1 group" else "$it groups" },
+                        onSelect = { id -> PlaylistFilter.select(id) },
+                        modifier = Modifier.padding(horizontal = NuvioTokens.Space.s12, vertical = NuvioTokens.Space.s8),
                     )
                 }
                 combinedSections.forEachIndexed { index, combinedSection ->
@@ -572,15 +547,12 @@ private fun QuickChannelsInlineSection(
     val liveChannels by com.nuvio.app.features.livetv.data.LiveTvRepository.channels.collectAsStateWithLifecycle(initialValue = emptyList())
     val categories = QuickChannelList.getChannelCategories()
     var selectedCategory by remember { mutableStateOf(categories.firstOrNull() ?: "all") }
-    val filteredQc = remember(selectedCategory) {
+    var quickDataVersion by remember { mutableStateOf(0) }
+    val filteredQc = remember(selectedCategory, quickDataVersion) {
         QuickChannelList.getChannelsForCategory(selectedCategory)
     }
     var selectedQc by remember { mutableStateOf<QuickChannel?>(null) }
-    var matches by remember { mutableStateOf<List<com.nuvio.app.features.livetv.model.LiveChannel>>(emptyList()) }
-    var aliveByUrl by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
-    val checked = remember(aliveByUrl) { aliveByUrl.values.count { it } }
-    val unchecked = remember(aliveByUrl) { aliveByUrl.count { it.value == null } }
-    val checking = unchecked > 0
+    val validation = rememberQuickChannelMatchState(selectedQc, liveChannels)
 
     // Custom region/channel management state
     var showAddRegionDialog by remember { mutableStateOf(false) }
@@ -597,21 +569,6 @@ private fun QuickChannelsInlineSection(
     var newChannelAliases by remember { mutableStateOf("") }
     var newChannelRegions by remember { mutableStateOf("") }
     var newChannelTags by remember { mutableStateOf("") }
-
-    LaunchedEffect(selectedQc) {
-        if (selectedQc != null) {
-            aliveByUrl = emptyMap()
-            val q = selectedQc!!
-            matches = liveChannels.filter { QuickChannelList.matches(q, it) }
-            if (matches.isNotEmpty()) {
-                val statuses = QuickStreamChecker.checkBatch(matches.map { it.url })
-                aliveByUrl = statuses
-            }
-        } else {
-            matches = emptyList()
-            aliveByUrl = emptyMap()
-        }
-    }
 
     Column(
         modifier = Modifier
@@ -640,12 +597,12 @@ private fun QuickChannelsInlineSection(
                 modifier = Modifier.weight(1f),
             )
             // Add custom region button
-            IconButton(onClick = { showAddRegionDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Add Region", tint = tokens.accent)
+            TextButton(onClick = { showAddRegionDialog = true }) {
+                Text("+REG", style = MaterialTheme.typography.labelLarge, color = tokens.accent, fontWeight = FontWeight.SemiBold)
             }
             // Add custom channel button
-            IconButton(onClick = { showAddChannelDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Add Channel", tint = tokens.accent)
+            TextButton(onClick = { showAddChannelDialog = true }) {
+                Text("+CH", style = MaterialTheme.typography.labelLarge, color = tokens.accent, fontWeight = FontWeight.SemiBold)
             }
         }
 
@@ -679,7 +636,7 @@ private fun QuickChannelsInlineSection(
                             fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
                         )
                         if (isCustom) {
-                            IconButton(onClick = { QuickChannelList.removeCustomCategory(catId); if (selectedCategory == catId) selectedCategory = "all" }, modifier = Modifier.size(18.dp)) {
+                            IconButton(onClick = { QuickChannelList.removeCustomCategory(catId); quickDataVersion += 1; if (selectedCategory == catId) selectedCategory = "all" }, modifier = Modifier.size(18.dp)) {
                                 Icon(Icons.Default.Delete, contentDescription = "Delete", tint = if (isActive) Color.White else tokens.textMuted, modifier = Modifier.size(14.dp))
                             }
                             IconButton(onClick = { editingRegion = QuickChannelList.allCategories().find { it.id == catId }; showEditRegionDialog = true }, modifier = Modifier.size(18.dp)) {
@@ -706,8 +663,6 @@ private fun QuickChannelsInlineSection(
                         .clip(RoundedCornerShape(NuvioTokens.Radius.md))
                         .background(if (selectedQc?.displayName == qc.displayName) tokens.accent.copy(alpha = 0.2f) else tokens.surfaceCard)
                         .clickable {
-                            matches = emptyList()
-                            aliveByUrl = emptyMap()
                             selectedQc = qc
                         }
                         .padding(horizontal = NuvioTokens.Space.s10, vertical = NuvioTokens.Space.s10),
@@ -730,7 +685,7 @@ private fun QuickChannelsInlineSection(
                                 IconButton(onClick = { editingChannel = qc; showEditChannelDialog = true }, modifier = Modifier.size(22.dp)) {
                                     Icon(Icons.Default.Edit, contentDescription = "Edit", tint = tokens.textMuted, modifier = Modifier.size(16.dp))
                                 }
-                                IconButton(onClick = { QuickChannelList.removeCustomChannel(qc.displayName); if (selectedQc?.displayName == qc.displayName) selectedQc = null }, modifier = Modifier.size(22.dp)) {
+                                IconButton(onClick = { QuickChannelList.removeCustomChannel(qc.displayName); quickDataVersion += 1; if (selectedQc?.displayName == qc.displayName) selectedQc = null }, modifier = Modifier.size(22.dp)) {
                                     Icon(Icons.Default.Delete, contentDescription = "Delete", tint = tokens.textMuted, modifier = Modifier.size(16.dp))
                                 }
                             }
@@ -741,7 +696,7 @@ private fun QuickChannelsInlineSection(
         }
 
         // Match list - scrollable popup
-        if (selectedQc != null && matches.isNotEmpty()) {
+        if (selectedQc != null && validation.matches.isNotEmpty()) {
             Spacer(Modifier.height(NuvioTokens.Space.s6))
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = NuvioTokens.Space.s12),
@@ -754,7 +709,7 @@ private fun QuickChannelsInlineSection(
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),
                 )
-                if (checking) {
+                if (validation.isChecking) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(14.dp),
                         color = tokens.accent,
@@ -764,31 +719,38 @@ private fun QuickChannelsInlineSection(
                 }
                 // Show only working streams count
                 Text(
-                    "$checked working",
+                    "${validation.workingCount} working",
                     style = MaterialTheme.typography.labelSmall,
                     color = tokens.textMuted,
                 )
             }
             Spacer(Modifier.height(NuvioTokens.Space.s8))
-            // Sort: working (true) first, then null (checking), then false (not working - hidden)
-            val sortedMatches = matches.sortedWith(
-                compareByDescending<com.nuvio.app.features.livetv.model.LiveChannel> { ch -> aliveByUrl[ch.url] == true }
-                    .thenByDescending { ch -> aliveByUrl[ch.url] == null }
-            ).filter { ch -> aliveByUrl[ch.url] != false } // Hide non-working streams
+            // Working streams first, then streams still being checked; dead ones are hidden.
+            val sortedMatches = validation.visibleMatches
 
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s6),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 240.dp)
-                    .padding(horizontal = NuvioTokens.Space.s12),
-            ) {
-                items(sortedMatches, key = { it.key }) { ch ->
-                    val isAlive = aliveByUrl[ch.url]
-                    QuickChannelInlineRow(channel = ch, isAlive = isAlive, onClick = { onPlayChannel(ch) })
+            if (sortedMatches.isEmpty() && !validation.isChecking) {
+                Spacer(Modifier.height(NuvioTokens.Space.s12))
+                Text(
+                    "No working streams found",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = tokens.textMuted,
+                    modifier = Modifier.padding(horizontal = NuvioTokens.Space.s12),
+                )
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s6),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 240.dp)
+                        .padding(horizontal = NuvioTokens.Space.s12),
+                ) {
+                    items(sortedMatches, key = { it.key }) { ch ->
+                        val isAlive = validation.statuses[ch.url]
+                        QuickChannelInlineRow(channel = ch, isAlive = isAlive, onClick = { onPlayChannel(ch) })
+                    }
                 }
             }
-        } else if (selectedQc != null && matches.isEmpty() && aliveByUrl.isNotEmpty()) {
+        } else if (selectedQc != null && liveChannels.isNotEmpty()) {
             Spacer(Modifier.height(NuvioTokens.Space.s12))
             Text(
                 stringResource(Res.string.livetv_no_matching_channels),
@@ -811,6 +773,7 @@ private fun QuickChannelsInlineSection(
                     tags = tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
                 )
                 QuickChannelList.addCustomCategory(category)
+                quickDataVersion += 1
                 showAddRegionDialog = false
             },
         )
@@ -828,6 +791,7 @@ private fun QuickChannelsInlineSection(
                     tags = tags.split(",").map { it.trim().lowercase() }.filter { it.isNotBlank() }
                 )
                 QuickChannelList.addCustomChannel(channel)
+                quickDataVersion += 1
                 showAddChannelDialog = false
             },
         )
@@ -847,6 +811,7 @@ private fun QuickChannelsInlineSection(
                     tags = tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
                 )
                 QuickChannelList.updateCustomCategory(region.id, category)
+                quickDataVersion += 1
                 showEditRegionDialog = false
                 editingRegion = null
             },
@@ -867,6 +832,7 @@ private fun QuickChannelsInlineSection(
                     tags = tags.split(",").map { it.trim().lowercase() }.filter { it.isNotBlank() }
                 )
                 QuickChannelList.updateCustomChannel(channel.displayName, updated)
+                quickDataVersion += 1
                 showEditChannelDialog = false
                 editingChannel = null
             },
@@ -956,7 +922,7 @@ private fun AddonsCatalogInlineSection(
     }
 
     val uiState by AddonRepository.uiState.collectAsStateWithLifecycle()
-    val addons = uiState.addons
+    val addons = uiState.addons.liveTvAddons()
 
     Column(verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s4)) {
         if (addons.isEmpty()) {
@@ -1222,6 +1188,7 @@ private fun ExpandableCatalogSection(
             catalogState.value = CatalogUiState()
             return@LaunchedEffect
         }
+        catalogState.value = CatalogUiState(isLoading = true)
         try {
             val page = fetchCatalogPage(
                 manifestUrl = manifestUrl,
@@ -1297,17 +1264,26 @@ private fun CatalogItemsRow(
                 color = tokens.textMuted,
             )
         } else {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8),
-                verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8),
-            ) {
-                items(uiState.items.size, key = { i -> i.toString() }) { i ->
-                    CatalogItemTile(
-                        item = uiState.items[i],
-                        tokens = tokens,
-                        onClick = { onCatalogItemClick(uiState.items[i]) },
-                    )
+            // A plain Column grid: this section lives inside the screen's LazyColumn, and a
+            // LazyVerticalGrid nested there has unbounded height and crashes when items load.
+            Column(verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8)) {
+                uiState.items.chunked(3).forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8),
+                    ) {
+                        row.forEach { item ->
+                            CatalogItemTile(
+                                item = item,
+                                tokens = tokens,
+                                onClick = { onCatalogItemClick(item) },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        repeat(3 - row.size) {
+                            Spacer(Modifier.weight(1f))
+                        }
+                    }
                 }
             }
         }
@@ -1321,8 +1297,9 @@ private fun CatalogItemTile(
     item: MetaPreview,
     tokens: com.nuvio.app.core.ui.NuvioColorTokens,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
