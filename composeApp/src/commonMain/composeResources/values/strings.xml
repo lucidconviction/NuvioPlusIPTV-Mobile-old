@@ -2768,6 +2768,7 @@
     <string name="livetv_sports_all_events">All Events</string>
     <string name="livetv_sports_search">Search</string>
     <string name="livetv_sports_following">Following</string>
+    <string name="livetv_sports_replays">Replays</string>
     <string name="livetv_sports_live_now">Live now</string>
     <string name="livetv_sports_this_week">This week</string>
     <string name="livetv_sports_upcoming">Upcoming</string>
@@ -2812,6 +2813,8 @@
     <string name="livetv_sports_remind">Remind me</string>
     <string name="livetv_sports_reminded">Reminder set</string>
     <string name="livetv_sports_latest_scoring">Latest scoring</string>
+    <string name="livetv_sports_pre_event_videos">Pre-event videos</string>
+    <string name="livetv_sports_post_event_videos">Post-event videos</string>
     <string name="livetv_sports_game_gone">This game isn't in the schedule any more.</string>
     <string name="livetv_sports_table">Table</string>
     <string name="livetv_sports_games">Games</string>

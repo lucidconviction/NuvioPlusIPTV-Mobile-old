@@ -81,6 +81,7 @@ import nuvio.composeapp.generated.resources.livetv_sports_my_sports
 import nuvio.composeapp.generated.resources.livetv_sports_nothing_followed
 import nuvio.composeapp.generated.resources.livetv_sports_nothing_today
 import nuvio.composeapp.generated.resources.livetv_sports_pick_teams
+import nuvio.composeapp.generated.resources.livetv_sports_replays
 import nuvio.composeapp.generated.resources.livetv_sports_search
 import nuvio.composeapp.generated.resources.livetv_sports_this_week
 import nuvio.composeapp.generated.resources.livetv_sports_upcoming
@@ -94,7 +95,7 @@ data class SportsActions(
     val onOpenLeague: (League) -> Unit,
 )
 
-private enum class SportsTab { MINE, ALL, SEARCH, FOLLOWING }
+private enum class SportsTab { MINE, ALL, SEARCH, FOLLOWING, REPLAYS }
 
 /**
  * The Sports hub: My Sports (a row per team, league and name you follow), All Events (every game
@@ -155,6 +156,7 @@ fun SportsScreen(
             Chip(stringResource(Res.string.livetv_sports_all_events), selected = tab == SportsTab.ALL, onClick = { tabIndex = SportsTab.ALL.ordinal })
             Chip(stringResource(Res.string.livetv_sports_search), selected = tab == SportsTab.SEARCH, onClick = { tabIndex = SportsTab.SEARCH.ordinal })
             Chip(stringResource(Res.string.livetv_sports_following), selected = tab == SportsTab.FOLLOWING, onClick = { tabIndex = SportsTab.FOLLOWING.ordinal })
+            Chip(stringResource(Res.string.livetv_sports_replays), selected = tab == SportsTab.REPLAYS, onClick = { tabIndex = SportsTab.REPLAYS.ordinal })
         }
         problem?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, color = tokens.colors.danger, modifier = Modifier.padding(horizontal = NuvioTokens.Space.s16), maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -164,6 +166,7 @@ fun SportsScreen(
             SportsTab.ALL -> AllEventsTab(events, follows, settings, matches, now, use24h, loading, actions)
             SportsTab.SEARCH -> SportsSearchTab(known, follows, actions)
             SportsTab.FOLLOWING -> SportsFollowingTab(follows, settings, actions)
+            SportsTab.REPLAYS -> SportsReplaysTab(settings, follows)
         }
     }
 

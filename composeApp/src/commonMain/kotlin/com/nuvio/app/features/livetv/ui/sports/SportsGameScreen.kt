@@ -88,10 +88,12 @@ import com.nuvio.app.features.livetv.sports.SportsCatalog
 import com.nuvio.app.features.livetv.sports.SportsEvent
 import com.nuvio.app.features.livetv.sports.SportsMatcher
 import com.nuvio.app.features.livetv.sports.SportsRecordings
+import com.nuvio.app.features.livetv.sports.SportsReplays
 import com.nuvio.app.features.livetv.sports.SportsRepository
 import com.nuvio.app.features.livetv.sports.Standings
 import com.nuvio.app.features.livetv.sports.TeamInfo
 import com.nuvio.app.features.livetv.ui.ChannelLogo
+import com.nuvio.app.features.youtube.YouTubeHost
 import kotlinx.coroutines.delay
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.action_cancel
@@ -102,6 +104,8 @@ import nuvio.composeapp.generated.resources.livetv_sports_maybe
 import nuvio.composeapp.generated.resources.livetv_sports_no_channels
 import nuvio.composeapp.generated.resources.livetv_sports_not_this_channel
 import nuvio.composeapp.generated.resources.livetv_sports_pick_channel
+import nuvio.composeapp.generated.resources.livetv_sports_post_event_videos
+import nuvio.composeapp.generated.resources.livetv_sports_pre_event_videos
 import nuvio.composeapp.generated.resources.livetv_sports_record
 import nuvio.composeapp.generated.resources.livetv_sports_remind
 import nuvio.composeapp.generated.resources.livetv_sports_reminded
@@ -180,6 +184,20 @@ private fun GameBody(ev: SportsEvent, actions: SportsActions) {
         if (ev.state == GameState.PRE && !hide && league != null && repo.mayHaveTable(league)) runCatching { repo.standings(ev.leagueId) }
     }
     val grouped = remember(matches) { SportsMatcher.groupCopies(matches) }
+    val eventVideosOn = YouTubeHost.videosAvailable
+    val eventVideoTitle = stringResource(
+        if (ev.state == GameState.POST) Res.string.livetv_sports_post_event_videos
+        else Res.string.livetv_sports_pre_event_videos,
+    )
+    val eventVideoSubtitle = if (ev.state == GameState.POST) {
+        "Highlights, interviews and reaction"
+    } else {
+        "Commentary, previews and press conferences"
+    }
+    val eventVideoQuery = remember(ev.id, ev.state) {
+        if (ev.state == GameState.POST) SportsReplays.postEventQuery(ev, sport)
+        else SportsReplays.preEventQuery(ev, sport)
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -275,6 +293,17 @@ private fun GameBody(ev: SportsEvent, actions: SportsActions) {
                 onPlay = { c -> actions.onPlay(c.channel, ev.title) },
                 onLongPress = { c -> haptics.performHapticFeedback(HapticFeedbackType.LongPress); channelMenu = c },
             )
+        }
+        // ---- YouTube videos for this game: previews before it, highlights and reaction after it.
+        if (eventVideosOn) {
+            item(key = "event-videos") {
+                SportsVideoRow(
+                    title = eventVideoTitle,
+                    subtitle = eventVideoSubtitle,
+                    query = eventVideoQuery,
+                    modifier = Modifier.padding(top = NuvioTokens.Space.s4),
+                )
+            }
         }
         // ---- latest scoring
         if (plays.isNotEmpty()) {

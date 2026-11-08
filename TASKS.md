@@ -8,18 +8,34 @@ constraints, acceptance criteria, and verification commands.
 
 | ID | Status | Priority | Task |
 |----|--------|----------|------|
-| TASK-2026-11-07-SPORTS-REPLAYS | queued | P2 | Sports Replays section on the Sports page (YouTube-only) |
+| TASK-2026-11-07-SPORTS-REPLAYS | done | P2 | Sports Replays section on the Sports page (YouTube-only) |
 
 ---
 
 ## TASK-2026-11-07-SPORTS-REPLAYS — Sports Replays section on the Sports page
 
-- **Status:** queued (do not implement as part of queueing this task)
+- **Status:** done — implemented 2026-11-08 with the app's YouTube tabs engine (no API key), plus
+  pre/post-event YouTube rows on each game's page.
 - **Created:** 2026-11-07
 - **Project:** `/Users/robbdeeze/Documents/projects/NuvioPlusIPTV-Mobile-old-main`
 - **Area:** Live TV → Sports
 - **Depends on:** a YouTube Data API v3 key for live results. The keyless mode must still work.
 - **Spec:** `/Users/robbdeeze/.hermes/profiles/web-reach-scout/workspace/sports-replays-api.md`
+
+### Implementation (2026-11-08)
+
+- **Replays tab:** directly after Following, with a sport filter and one YouTube row per sport in
+  the region (plus followed sports). Each row is cached for an hour.
+- **Game page:** directly under Watch on, a **Pre-event videos** row for upcoming/live games
+  (commentary, previews, press conferences, weigh-ins) and a **Post-event videos** row for
+  finished games (highlights, interviews, reaction).
+- **Engine:** `YouTubeHost.searchVideos` / `playVideo`, backed by `YouTubeViewModel` and
+  MediaServiceCore — the same search and playback path as the YouTube tabs. No YouTube Data API
+  key, Highlightly, ScoreBat or other provider is used.
+
+> The dated requirements below describe the earlier YouTube Data API plan. The shipped version
+> follows the engine-only approach above: no API key, no keyless mode, and no date picker are
+> needed because the app's YouTube engine searches without one.
 
 ### Goal
 

@@ -12,6 +12,15 @@ data class YouTubePlayRequest(
     val startPositionMs: Long = 0L,
 )
 
+/** A YouTube video shown outside the YouTube tab (Sports replays and event videos). */
+data class YouTubeVideoCard(
+    val videoId: String,
+    val title: String,
+    val author: String?,
+    val thumbnail: String?,
+    val badge: String? = null,
+)
+
 /**
  * The YouTube page lives in Android-only code (it needs SmartTube's engine). The Android app sets
  * [screen] at start-up; on other platforms it stays empty and the tab is not shown.
@@ -69,4 +78,20 @@ object YouTubeHost {
 
     var screen: (@Composable (modifier: Modifier, onPlay: (YouTubePlayRequest) -> Unit) -> Unit)? = null
     val available: Boolean get() = screen != null
+
+    /**
+     * Searches YouTube through the same engine as the YouTube tabs, without changing the tab
+     * feed. Set on Android; empty elsewhere.
+     */
+    var searchVideos: (suspend (query: String, limit: Int) -> List<YouTubeVideoCard>)? = null
+
+    /**
+     * Plays one of [searchVideos]' results in the app's YouTube player, using [queue] as the
+     * list for "More Videos" and autoplay. Fails with a user-readable message when YouTube
+     * won't play the video.
+     */
+    var playVideo: (suspend (video: YouTubeVideoCard, queue: List<YouTubeVideoCard>) -> Result<Unit>)? = null
+
+    /** True when the Sports page can show YouTube videos. */
+    val videosAvailable: Boolean get() = searchVideos != null && playVideo != null
 }

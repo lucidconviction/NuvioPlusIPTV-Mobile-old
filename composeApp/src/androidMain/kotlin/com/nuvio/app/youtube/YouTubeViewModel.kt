@@ -101,7 +101,7 @@ data class YtPlayable(
  * The YouTube section's data. Everything here is shown only inside the YouTube page; nothing is
  * handed to Home, Continue Watching or the library.
  */
-class YouTubeViewModel (private val context: Context) : ViewModel() {
+class YouTubeViewModel (private val context: Context, autoSelect: Boolean = true) : ViewModel() {
     private companion object {
         const val TAG = "YouTubeVM"
         const val MAX_CLIENT_SWITCHES = 8
@@ -135,7 +135,7 @@ class YouTubeViewModel (private val context: Context) : ViewModel() {
 
     val canGoBack: Boolean get() = backStack.isNotEmpty()
 
-    init { selectTab(YouTubeSettings.lastTab(context)) }
+    init { if (autoSelect) selectTab(YouTubeSettings.lastTab(context)) }
 
     // ---- feeds ----
 
@@ -191,6 +191,27 @@ class YouTubeViewModel (private val context: Context) : ViewModel() {
                 subTitle = "Results for \"${query.trim()}\"")
         }
         loadRows(query) { content.getSearchObserve(query) }
+    }
+
+    /**
+     * Searches YouTube through the same engine as the tabs, without touching what the YouTube
+     * tab is showing. Used by the Sports page for replay and event-video rows.
+     */
+    suspend fun searchVideos(query: String, limit: Int = 12): List<YtItem> = withContext(Dispatchers.IO) {
+        if (query.isBlank() || limit <= 0) return@withContext emptyList()
+        YouTubeContentRegion.apply(context)
+        refreshHidden()
+        filtersOn = true
+        channelBlockOn = true
+        runCatching {
+            withRetry {
+                content.getSearchObserve(query.trim()).blockingFirst()
+                    .flatMap { toItems(it) }
+                    .filter { it.kind == YtKind.VIDEO && !it.isLive && !it.isShorts && it.videoId != null }
+                    .distinctBy { it.videoId }
+                    .take(limit)
+            }
+        }.getOrDefault(emptyList())
     }
 
     /** Opens a channel or playlist on top of the current page. */

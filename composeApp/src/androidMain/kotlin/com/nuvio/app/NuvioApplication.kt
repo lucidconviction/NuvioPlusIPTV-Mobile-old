@@ -51,6 +51,14 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
         com.nuvio.app.features.youtube.YouTubeHost.screen = { modifier, onPlay ->
             com.nuvio.app.youtube.YouTubeScreen(modifier, onPlay)
         }
+        // Sports replays and pre/post-event videos use the same YouTube engine as the tabs.
+        com.nuvio.app.youtube.YouTubeSports.init(this)
+        com.nuvio.app.features.youtube.YouTubeHost.searchVideos = { query, limit ->
+            com.nuvio.app.youtube.YouTubeSports.search(query, limit)
+        }
+        com.nuvio.app.features.youtube.YouTubeHost.playVideo = { video, queue ->
+            com.nuvio.app.youtube.YouTubeSports.play(video, queue)
+        }
     }
 
     override fun newImageLoader(context: android.content.Context): ImageLoader {
