@@ -117,9 +117,9 @@ fun YouTubeScreen(modifier: Modifier = Modifier, onPlay: (YouTubePlayRequest) ->
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
     val compact = maxWidth < 600.dp
-    val navBarStyle by com.nuvio.app.features.settings.ThemeSettingsRepository.navBarStyle.collectAsStateWithLifecycle()
-    // Only the CLASSIC tablet top rail needs clearing; the bottom pill doesn't.
-    val topRail = maxWidth >= 768.dp && navBarStyle == com.nuvio.app.features.settings.NavBarStyle.CLASSIC
+    // On a tablet the app's floating top navigation pill sits over this page; leave room for it.
+    // (The pill floats regardless of the chosen nav bar style, so width alone decides this.)
+    val topRail = maxWidth >= 768.dp
     val bottomBar = LocalNuvioBottomNavigationOverlayPadding.current
     var searchOpen by remember { mutableStateOf(false) }
     CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onBackground) {

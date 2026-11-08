@@ -33,6 +33,7 @@ import com.nuvio.app.features.p2p.formatP2pSpeed
 import com.nuvio.app.features.player.skip.internalSkipAction
 import com.nuvio.app.features.servers.ServerStreams
 import com.nuvio.app.features.streams.streamAddonInstanceId
+import com.nuvio.app.features.youtube.YouTubeHost
 import com.nuvio.app.isIos
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -303,6 +304,19 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
             folded = fold != null,
             modifier = panelModifier,
         )
+        // YouTube's "More Videos": a strip of the list the current video was picked from.
+        if (contentType == "youtube") {
+            val youTubeVideoId = activeVideoId
+            val moreVideos = YouTubeHost.moreVideos
+            if (youTubeVideoId != null && moreVideos != null) {
+                moreVideos(
+                    youTubeVideoId,
+                    controlsVisible && !playerControlsLocked && errorMessage == null && !isInPip && !isPanelOpen,
+                ) { request ->
+                    YouTubeHost.openVideo?.invoke(request)
+                }
+            }
+        }
         Box(modifier = videoModifier) {
             RenderPlaybackOverlays(
                 runtime = runtime,

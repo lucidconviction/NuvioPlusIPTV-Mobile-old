@@ -6,14 +6,17 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -37,9 +41,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.ui.NuvioTokens
@@ -59,12 +67,14 @@ internal fun MiniPlayerHost(
 ) {
     val stream by MiniPlayerRepository.stream.collectAsStateWithLifecycle()
     stream?.let { current ->
-        key(current.url) {
-            MiniPlayerWindow(
-                stream = current,
-                onExpand = { onExpand(current) },
-                modifier = modifier,
-            )
+        BoxWithConstraints(modifier = modifier) {
+            key(current.url) {
+                MiniPlayerWindow(
+                    stream = current,
+                    onExpand = { onExpand(current) },
+                    availableWidth = maxWidth,
+                )
+            }
         }
     }
 }
@@ -73,13 +83,19 @@ internal fun MiniPlayerHost(
 private fun MiniPlayerWindow(
     stream: MiniPlayerStream,
     onExpand: () -> Unit,
-    modifier: Modifier = Modifier,
+    availableWidth: Dp,
 ) {
     var controller by remember { mutableStateOf<PlayerEngineController?>(null) }
     var snapshot by remember { mutableStateOf(PlayerPlaybackSnapshot()) }
     var error by remember { mutableStateOf<String?>(null) }
     var controlsVisible by remember { mutableStateOf(true) }
     var touchCount by remember { mutableStateOf(0) }
+    // The user can drag the bottom-right corner; the width survives stream swaps and reopen.
+    var widthDp by remember { mutableStateOf(MiniPlayerRepository.widthDp.value) }
+    val density = LocalDensity.current
+    val minWidth = MiniPlayerRepository.MinWidthDp
+    val maxWidth = availableWidth.value.coerceAtLeast(minWidth)
+    val shownWidth = widthDp.coerceIn(minWidth, maxWidth).dp
 
     LaunchedEffect(touchCount) {
         controlsVisible = true
@@ -88,8 +104,8 @@ private fun MiniPlayerWindow(
     }
 
     Box(
-        modifier = modifier
-            .width(200.dp)
+        modifier = Modifier
+            .width(shownWidth)
             .aspectRatio(16f / 9f)
             .background(Color.Black, RoundedCornerShape(NuvioTokens.Radius.lg))
             .border(1.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(NuvioTokens.Radius.lg))
@@ -188,6 +204,33 @@ private fun MiniPlayerWindow(
                     },
                 )
             }
+        }
+
+        // Drag this corner to resize the window; the 16:9 aspect ratio is kept.
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(2.dp)
+                .size(26.dp)
+                .clip(RoundedCornerShape(topStart = NuvioTokens.Radius.md, bottomEnd = NuvioTokens.Radius.lg))
+                .background(Color.Black.copy(alpha = 0.55f))
+                .pointerInput(availableWidth) {
+                    detectDragGestures { change, dragAmount ->
+                        change.consume()
+                        val delta = with(density) { dragAmount.x.toDp().value }
+                        val next = (widthDp + delta).coerceIn(minWidth, maxWidth)
+                        widthDp = next
+                        MiniPlayerRepository.setWidthDp(next)
+                    }
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.OpenInFull,
+                contentDescription = "Drag to resize",
+                tint = Color.White.copy(alpha = 0.9f),
+                modifier = Modifier.size(13.dp),
+            )
         }
 
         error?.let { message ->

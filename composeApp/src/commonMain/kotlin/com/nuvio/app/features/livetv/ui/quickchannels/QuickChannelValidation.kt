@@ -61,7 +61,7 @@ internal fun rememberQuickChannelMatchState(
         state = QuickChannelMatchState(matches = matches, statuses = pending)
         if (matches.isEmpty()) return@LaunchedEffect
 
-        QuickStreamChecker.checkBatch(matches.map { it.url }) { url, alive ->
+        QuickStreamChecker.checkBatch(matches) { url, alive ->
             if (run[0] == myRun && state.statuses[url] == null) {
                 state = state.copy(statuses = state.statuses + (url to alive))
             }

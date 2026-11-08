@@ -31,8 +31,18 @@ data class MiniPlayerStream(
 
 /** The in-app PiP stream, kept above navigation so it survives every screen change. */
 object MiniPlayerRepository {
+    /** Default width of the floating window, and the range the user can resize it within. */
+    const val DefaultWidthDp = 200f
+    const val MinWidthDp = 140f
+    const val MaxWidthDp = 480f
+
     private val _stream = MutableStateFlow<MiniPlayerStream?>(null)
     val stream: StateFlow<MiniPlayerStream?> = _stream.asStateFlow()
+
+    private val _widthDp = MutableStateFlow(DefaultWidthDp)
+
+    /** The user-chosen window width, kept while streams are swapped and the window is reopened. */
+    val widthDp: StateFlow<Float> = _widthDp.asStateFlow()
 
     fun show(stream: MiniPlayerStream) {
         if (stream.url.isBlank()) return
@@ -41,6 +51,11 @@ object MiniPlayerRepository {
 
     fun hide() {
         _stream.value = null
+    }
+
+    /** Resizes the window; clamped to a sane range, and to the screen by the window itself. */
+    fun setWidthDp(widthDp: Float) {
+        _widthDp.value = widthDp.coerceIn(MinWidthDp, MaxWidthDp)
     }
 }
 

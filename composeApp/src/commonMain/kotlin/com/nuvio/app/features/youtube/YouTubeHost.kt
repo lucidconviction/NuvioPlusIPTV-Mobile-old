@@ -49,6 +49,9 @@ object YouTubeHost {
     /** Drawn over the player while a YouTube video plays: the up-next card, and starting the next video when this one ends. */
     var playerOverlay: (@Composable (videoId: String, positionMs: Long, durationMs: Long, ended: Boolean, playNext: (YouTubePlayRequest) -> Unit) -> Unit)? = null
 
+    /** The player's "More Videos" button and the list the current video was picked from. */
+    var moreVideos: (@Composable (videoId: String, buttonVisible: Boolean, onPlay: (YouTubePlayRequest) -> Unit) -> Unit)? = null
+
     /** The data and actions behind the YouTube buttons in the player's controls. [openPanel] shows the panel. */
     var playerControls: (@Composable (videoId: String, openPanel: () -> Unit) -> YouTubePlayerAction)? = null
 

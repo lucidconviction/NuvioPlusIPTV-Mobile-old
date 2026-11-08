@@ -38,6 +38,9 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
         com.nuvio.app.features.youtube.YouTubeHost.playerOverlay = { videoId, position, duration, ended, playNext ->
             com.nuvio.app.youtube.YouTubePlayerOverlay(videoId, position, duration, ended, playNext)
         }
+        com.nuvio.app.features.youtube.YouTubeHost.moreVideos = { videoId, buttonVisible, onPlay ->
+            com.nuvio.app.youtube.YouTubeMoreVideos(videoId, buttonVisible, onPlay)
+        }
         com.nuvio.app.features.youtube.YouTubeHost.settingsContent = { com.nuvio.app.youtube.YouTubeSettingsContent() }
         com.nuvio.app.features.youtube.YouTubeHost.recordProgress = { contentId, position, duration ->
             com.nuvio.app.youtube.YouTubeProgress.record(this, contentId, position, duration)

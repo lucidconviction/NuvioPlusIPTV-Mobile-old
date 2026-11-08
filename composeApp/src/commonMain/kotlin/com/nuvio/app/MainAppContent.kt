@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -105,12 +106,14 @@ import com.nuvio.app.features.collection.CollectionRepository
 import com.nuvio.app.features.collection.CollectionSyncService
 import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.features.details.MetaScreenSettingsRepository
+import com.nuvio.app.features.details.firstPlayableEpisode
 import com.nuvio.app.features.downloads.DownloadItem
 import com.nuvio.app.features.downloads.DownloadSubtitles
 import com.nuvio.app.features.downloads.DownloadsRepository
 import com.nuvio.app.features.home.HomeCatalogSection
 import com.nuvio.app.features.home.HomeCatalogSettingsRepository
 import com.nuvio.app.features.home.HomeRepository
+import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.home.buildAddonCatalogRefreshSignature
 import com.nuvio.app.features.home.components.shouldBlurContinueWatchingArtwork
 import com.nuvio.app.features.library.LibraryItem
@@ -999,7 +1002,15 @@ internal fun MainAppContent(
                 initialPositionMs = request.startPositionMs ?: 0L,
             )
             val launchId = PlayerLaunchStore.put(playerLaunch)
-            navController.navigate(PlayerRoute(launchId = launchId, title = playerLaunch.title))
+            // Picking another video from the player's "More Videos" list swaps it in place
+            // instead of stacking a new player on the back stack.
+            navController.navigate(PlayerRoute(launchId = launchId, title = playerLaunch.title)) {
+                popUpTo<PlayerRoute> { inclusive = true }
+            }
+        }
+        // The player's "More Videos" overlay uses this to switch videos without owning navigation.
+        SideEffect {
+            com.nuvio.app.features.youtube.YouTubeHost.openVideo = { request -> openYouTubeVideo(request) }
         }
 
         val sportsActions = SportsActions(
@@ -1191,6 +1202,61 @@ internal fun MainAppContent(
             navController.navigate(
                 StreamRoute(launchId = streamLaunchId, title = title),
             )
+        }
+
+        /**
+         * Plays an add-on catalog item from the Live TV add-on folders without opening its
+         * details page. Series start at their first episode; a saved resume point is honored.
+         */
+        fun openLiveTvAddonItem(item: MetaPreview) {
+            coroutineScope.launch {
+                var videoId = item.id
+                var seasonNumber: Int? = null
+                var episodeNumber: Int? = null
+                var episodeTitle: String? = null
+                var episodeThumbnail: String? = null
+
+                if (item.type.equals("series", ignoreCase = true)) {
+                    val details = withTimeoutOrNull(15_000L) {
+                        runCatching { MetaDetailsRepository.fetch(item.type, item.id) }.getOrNull()
+                    }
+                    val episode = details?.firstPlayableEpisode()
+                    if (episode != null) {
+                        videoId = episode.id.takeIf { it.isNotBlank() } ?: item.id
+                        seasonNumber = episode.season
+                        episodeNumber = episode.episode
+                        episodeTitle = episode.title
+                        episodeThumbnail = episode.thumbnail
+                    }
+                }
+
+                val resume = WatchProgressRepository.progressForVideo(
+                    videoId = videoId,
+                    parentMetaId = item.id,
+                    seasonNumber = seasonNumber,
+                    episodeNumber = episodeNumber,
+                )?.takeIf { it.isResumable }
+
+                launchPlaybackWithDownloadPreference(
+                    type = item.type,
+                    videoId = videoId,
+                    parentMetaId = item.id,
+                    parentMetaType = item.type,
+                    title = item.name,
+                    logo = item.logo,
+                    poster = item.poster,
+                    background = item.banner ?: item.poster,
+                    seasonNumber = seasonNumber,
+                    episodeNumber = episodeNumber,
+                    episodeTitle = episodeTitle,
+                    episodeThumbnail = episodeThumbnail,
+                    pauseDescription = item.description,
+                    resumePositionMs = resume?.lastPositionMs,
+                    resumeProgressFraction = resume?.progressFraction,
+                    manualSelection = false,
+                    startFromBeginning = false,
+                )
+            }
         }
 
         fun openPartyMedia(media: PartyMedia) {
@@ -1648,6 +1714,7 @@ internal fun MainAppContent(
                                 onLiveTvMultiViewClick = { navController.navigate(LiveTvMultiViewRoute()) { launchSingleTop = true } },
                                 onLiveTvManageClick = { navController.navigate(LiveTvManageRoute(liveTvManageTitle)) },
                                 onLiveTvOpenAddonCatalog = openAddonCatalogAction,
+                                onLiveTvPlayAddonItem = ::openLiveTvAddonItem,
                                 onLiveTvOpenAddonSettings = { navController.navigate(AddonsSettingsRoute(addonsSettingsTitle)) },
                                 onLiveTvSettingsClick = {
                                     if (useNativeNavigation && !isTabletLayout) {

@@ -2,7 +2,6 @@ package com.nuvio.app.features.livetv.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.gestures.scrollBy
@@ -215,8 +214,8 @@ fun LiveTvScreen(
     onOpenManage: () -> Unit = {},
     /** Opens an add-on catalog. */
     onOpenAddonCatalog: (manifestUrl: String, com.nuvio.app.features.addons.AddonCatalog) -> Unit = { _, _ -> },
-    /** Called when a catalog item (MetaPreview) is tapped inside an inline addon catalog. */
-    onCatalogItemClick: (MetaPreview) -> Unit = {},
+    /** Plays a catalog item (MetaPreview) tapped inside an inline add-on folder. */
+    onPlayAddonItem: (MetaPreview) -> Unit = {},
     /** Opens the add-on settings / manage screen. */
     onOpenAddonSettings: () -> Unit = {},
 ) {
@@ -451,7 +450,7 @@ fun LiveTvScreen(
                         item(key = addonsKey) {
                             AddonsCatalogInlineSection(
                                 onOpenSettings = { onOpenAddonSettings() },
-                                onCatalogItemClick = onCatalogItemClick,
+                                onPlayItem = onPlayAddonItem,
                             )
                         }
                     } else {
@@ -908,11 +907,11 @@ private fun QuickChannelInlineRow(
 
 // ─── Addons inline section: each addon is a collapsible card, catalog items appear below ───
 
-/** Inline addon section rendered as expandable cards, matching the group/channel list style. */
+/** Inline add-on section rendered as nested folders, matching the playlist group/channel list. */
 @Composable
 private fun AddonsCatalogInlineSection(
     onOpenSettings: () -> Unit,
-    onCatalogItemClick: (MetaPreview) -> Unit,
+    onPlayItem: (MetaPreview) -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio.colors
     // Lazy-load addons only when this section enters the composition (user scrolls here).
@@ -956,7 +955,7 @@ private fun AddonsCatalogInlineSection(
                                 addonName = manifest.name,
                                 expanded = isCatExpanded,
                                 onToggle = { expandedCatalogs[catalogKey] = !isCatExpanded },
-                                onCatalogItemClick = onCatalogItemClick,
+                                onPlayItem = onPlayItem,
                             )
                         }
                     }
@@ -1017,7 +1016,7 @@ private fun AddonCard(
         }
 
         // Title + subtitle
-        Column(verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s4)) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s4)) {
             Text(
                 text = addon.displayTitle,
                 style = MaterialTheme.typography.titleMedium,
@@ -1051,7 +1050,7 @@ private fun AddonCard(
             Icon(
                 Icons.Filled.ExpandMore,
                 contentDescription = null,
-                tint = tokens.textMuted,
+                tint = if (expanded) tokens.accent else tokens.textMuted,
                 modifier = Modifier.rotate(arrow),
             )
         }
@@ -1107,7 +1106,7 @@ private fun AddonEmptyCatalogCard(
     }
 }
 
-// ─── Catalog card (indented sub-card) ──────────────────────────────────────────────────────
+// ─── Catalog folder row (indented sub-folder) ─────────────────────────────────────────────
 
 @Composable
 private fun CatalogCard(
@@ -1121,51 +1120,62 @@ private fun CatalogCard(
 ) {
     val tokens = MaterialTheme.nuvio.colors
     val arrow by animateFloatAsState(if (expanded) 180f else 0f)
+    val subtitle = buildString {
+        append(addonName)
+        append("  ·  ")
+        append(catalog.type)
+        if (!isLoading && errorMessage == null) {
+            append("  ·  ")
+            append(if (itemCount == 1) "1 item" else "$itemCount items")
+        }
+    }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = NuvioTokens.Space.s48)
-            .clip(RoundedCornerShape(NuvioTokens.Radius.md))
+            .padding(start = NuvioTokens.Space.s24)
+            .clip(RoundedCornerShape(NuvioTokens.Radius.xl))
             .background(tokens.surface)
             .clickable { onToggle() }
-            .padding(horizontal = NuvioTokens.Space.s12, vertical = NuvioTokens.Space.s10),
+            .padding(NuvioTokens.Space.s12),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s12),
     ) {
-        Icon(
-            Icons.Filled.MenuBook,
-            contentDescription = null,
-            tint = tokens.accent,
-            modifier = Modifier.size(NuvioTokens.Icon.md),
-        )
-        Column(modifier = Modifier.weight(1f)) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(NuvioTokens.Radius.lg))
+                .background(tokens.accent.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.MenuBook,
+                contentDescription = null,
+                tint = tokens.accent,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s4)) {
             Text(
                 text = catalog.name,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.titleMedium,
                 color = tokens.textPrimary,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = "$addonName  ·  ${catalog.type}",
-                style = MaterialTheme.typography.labelSmall,
-                color = tokens.textMuted,
-            )
-        }
-        if (!isLoading && errorMessage == null) {
-            Text(
-                "$itemCount",
+                text = subtitle,
                 style = MaterialTheme.typography.labelMedium,
                 color = tokens.textMuted,
-                modifier = Modifier.clip(RoundedCornerShape(NuvioTokens.Radius.xs)).background(tokens.surface),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         Icon(
             Icons.Filled.ExpandMore,
             contentDescription = null,
-            tint = tokens.textMuted,
+            tint = if (expanded) tokens.accent else tokens.textMuted,
             modifier = Modifier.rotate(arrow),
         )
     }
@@ -1179,7 +1189,7 @@ private fun ExpandableCatalogSection(
     addonName: String,
     expanded: Boolean,
     onToggle: () -> Unit,
-    onCatalogItemClick: (MetaPreview) -> Unit,
+    onPlayItem: (MetaPreview) -> Unit,
 ) {
     val catalogState = remember { mutableStateOf(CatalogUiState()) }
 
@@ -1222,96 +1232,101 @@ private fun ExpandableCatalogSection(
     )
 
     if (expanded) {
-        CatalogItemsRow(
+        CatalogItemsList(
             uiState = catalogState.value,
-            onCatalogItemClick = onCatalogItemClick,
+            onPlayItem = onPlayItem,
         )
     }
 }
 
-// ─── Catalog items row (indented grid, like channel rows) ──────────────────────────────────
+// ─── Catalog content rows (indented, like channel rows) ───────────────────────────────────
 
 @Composable
-private fun CatalogItemsRow(
+private fun CatalogItemsList(
     uiState: CatalogUiState,
-    onCatalogItemClick: (MetaPreview) -> Unit,
+    onPlayItem: (MetaPreview) -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio.colors
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = NuvioTokens.Space.s48 + NuvioTokens.Space.s12, end = NuvioTokens.Space.s12, top = NuvioTokens.Space.s4, bottom = NuvioTokens.Space.s8),
+            .padding(start = NuvioTokens.Space.s48, end = NuvioTokens.Space.s12, top = NuvioTokens.Space.s4, bottom = NuvioTokens.Space.s8),
+        verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s4),
     ) {
-        if (uiState.isLoading && uiState.items.isEmpty()) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8),
-            ) {
-                NuvioLoadingIndicator(size = NuvioTokens.Space.s16)
-                Text("Loading…", style = MaterialTheme.typography.bodySmall, color = tokens.textMuted)
+        when {
+            uiState.isLoading && uiState.items.isEmpty() -> {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8),
+                ) {
+                    NuvioLoadingIndicator(size = NuvioTokens.Space.s16)
+                    Text("Loading…", style = MaterialTheme.typography.bodySmall, color = tokens.textMuted)
+                }
             }
-        } else if (uiState.errorMessage != null) {
-            Text(
-                uiState.errorMessage!!,
-                style = MaterialTheme.typography.bodySmall,
-                color = tokens.danger,
-            )
-        } else if (uiState.items.isEmpty()) {
-            Text(
-                "No items",
-                style = MaterialTheme.typography.bodySmall,
-                color = tokens.textMuted,
-            )
-        } else {
-            // A plain Column grid: this section lives inside the screen's LazyColumn, and a
-            // LazyVerticalGrid nested there has unbounded height and crashes when items load.
-            Column(verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8)) {
-                uiState.items.chunked(3).forEach { row ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8),
-                    ) {
-                        row.forEach { item ->
-                            CatalogItemTile(
-                                item = item,
-                                tokens = tokens,
-                                onClick = { onCatalogItemClick(item) },
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                        repeat(3 - row.size) {
-                            Spacer(Modifier.weight(1f))
-                        }
-                    }
+
+            uiState.errorMessage != null -> {
+                Text(
+                    text = uiState.errorMessage.orEmpty(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = tokens.danger,
+                )
+            }
+
+            uiState.items.isEmpty() -> {
+                Text(
+                    text = "No items",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = tokens.textMuted,
+                )
+            }
+
+            else -> {
+                // Plain rows: this section lives inside the screen's LazyColumn, so content is
+                // laid out as a normal list instead of a nested lazy grid.
+                uiState.items.forEach { item ->
+                    AddonItemRow(item = item, onClick = { onPlayItem(item) })
                 }
             }
         }
     }
 }
 
-// ─── Catalog poster tile ───────────────────────────────────────────────────────────────────
+// ─── Add-on content row (plays in the player) ─────────────────────────────────────────────
 
 @Composable
-private fun CatalogItemTile(
+private fun AddonItemRow(
     item: MetaPreview,
-    tokens: com.nuvio.app.core.ui.NuvioColorTokens,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+    val tokens = MaterialTheme.nuvio.colors
+    val artwork = item.landscapePoster ?: item.poster ?: item.banner
+    val subtitle = buildList {
+        item.releaseInfo?.takeIf { it.isNotBlank() }?.let { add(it) }
+        item.type.takeIf { it.isNotBlank() }?.let { add(it.replaceFirstChar { c -> c.uppercaseChar() }) }
+    }.joinToString("  ·  ").ifBlank { item.description.orEmpty() }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(NuvioTokens.Radius.xl))
+            .background(tokens.surface)
+            .clickable(onClick = onClick)
+            .padding(horizontal = NuvioTokens.Space.s10, vertical = NuvioTokens.Space.s10),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s12),
+    ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(0.67f)
-                .clip(RoundedCornerShape(NuvioTokens.Radius.xs))
-                .background(tokens.surfaceCard)
-                .clickable(onClick = onClick),
+                .width(64.dp)
+                .height(44.dp)
+                .clip(RoundedCornerShape(NuvioTokens.Radius.md))
+                .background(tokens.surfaceCard),
             contentAlignment = Alignment.Center,
         ) {
-            if (!item.poster.isNullOrBlank()) {
+            if (!artwork.isNullOrBlank()) {
                 AsyncImage(
-                    model = item.poster,
+                    model = artwork,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
@@ -1321,18 +1336,29 @@ private fun CatalogItemTile(
                     Icons.Filled.PlayArrow,
                     contentDescription = null,
                     tint = tokens.textMuted,
-                    modifier = Modifier.size(24.dp),
+                    modifier = Modifier.size(NuvioTokens.Icon.md),
                 )
             }
         }
-        Text(
-            text = item.name,
-            style = MaterialTheme.typography.labelSmall,
-            color = tokens.textPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.fillMaxWidth().padding(top = NuvioTokens.Space.s4),
-        )
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s2)) {
+            Text(
+                text = item.name,
+                style = MaterialTheme.typography.bodyLarge,
+                color = tokens.textPrimary,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (subtitle.isNotBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = tokens.textMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
 

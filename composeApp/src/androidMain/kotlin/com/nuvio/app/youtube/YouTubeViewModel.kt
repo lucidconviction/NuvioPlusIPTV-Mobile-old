@@ -660,8 +660,17 @@ class YouTubeViewModel (private val context: Context) : ViewModel() {
     }
 
     /** What plays after the video that's on now: the rest of the list it was picked from, then YouTube's pick. */
-    private var queue: List<YtItem> = emptyList()
+    private var playQueue: List<YtItem> = emptyList()
     private val played = HashSet<String>()
+
+    /** The list the current video was picked from, for the player's "More Videos" panel. */
+    private val _queue = MutableStateFlow<List<YtItem>>(emptyList())
+    val queue: StateFlow<List<YtItem>> = _queue.asStateFlow()
+
+    private fun setQueue(items: List<YtItem>) {
+        playQueue = items
+        _queue.value = items
+    }
 
     /** What will play after the video on now, once it's been picked. Shown as the "up next" card. */
     private val _upNext = MutableStateFlow<YtItem?>(null)
@@ -686,7 +695,7 @@ class YouTubeViewModel (private val context: Context) : ViewModel() {
     /** The video after [currentVideoId]: the rest of the list it came from, then YouTube's pick. */
     private suspend fun pickNext(currentVideoId: String): YtItem? {
         played += currentVideoId
-        val fromList = queue.dropWhile { it.videoId != currentVideoId }.drop(1)
+        val fromList = playQueue.dropWhile { it.videoId != currentVideoId }.drop(1)
             .firstOrNull { it.kind == YtKind.VIDEO && !it.isLive && it.videoId !in played }
         return fromList ?: withContext(Dispatchers.IO) { runCatching { upNext(currentVideoId) }.getOrNull() }
     }
@@ -716,7 +725,7 @@ class YouTubeViewModel (private val context: Context) : ViewModel() {
         val candidates = listOfNotNull(meta.nextVideo) + meta.suggestions.orEmpty().flatMap { it.mediaItems.orEmpty() }
         val items = candidates.filter(::allowed).mapNotNull(::toItem).filter { it.kind == YtKind.VIDEO && !it.isLive && it.videoId !in played }
         // Whatever follows keeps playing on from this list.
-        queue = listOfNotNull(toItem(candidates.firstOrNull() ?: return null)) + items
+        setQueue(listOfNotNull(toItem(candidates.firstOrNull() ?: return null)) + items)
         return items.firstOrNull()
     }
 
@@ -733,20 +742,25 @@ class YouTubeViewModel (private val context: Context) : ViewModel() {
     }
 
     /** Plays a video, or opens a channel or playlist. [onReady] runs on the main thread. */
-    fun activate(item: YtItem, from: List<YtItem>, onReady: (YtPlayable) -> Unit) {
+    fun activate(
+        item: YtItem,
+        from: List<YtItem>,
+        onError: (String) -> Unit = { _error.value = it },
+        onReady: (YtPlayable) -> Unit,
+    ) {
         if (item.kind != YtKind.VIDEO) {
             open(item)
             return
         }
         val startMs = resumeMs(item)
         // What was on screen with it becomes the list that plays on from here.
-        queue = from.filter { it.kind == YtKind.VIDEO }
+        setQueue(from.filter { it.kind == YtKind.VIDEO })
         played.clear()
         prefetchJob?.cancel()
         viewModelScope.launch {
             lookup(item).await().fold(
                 onSuccess = { onReady(it.copy(startPositionMs = startMs)) },
-                onFailure = { _error.value = it.message ?: "Couldn't play this video" }
+                onFailure = { onError(it.message ?: "Couldn't play this video") }
             )
         }
     }
