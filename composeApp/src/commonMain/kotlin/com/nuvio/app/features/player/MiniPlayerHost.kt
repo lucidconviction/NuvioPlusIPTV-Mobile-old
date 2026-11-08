@@ -6,9 +6,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -48,6 +49,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -121,24 +124,39 @@ private fun MiniPlayerWindow(
             .aspectRatio(16f / 9f)
             .background(Color.Black, RoundedCornerShape(NuvioTokens.Radius.lg))
             .border(1.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(NuvioTokens.Radius.lg))
-            // Tap anywhere to bring the controls back.
-            .pointerInput(availableWidth, availableHeight, shownWidth) {
-                detectTapGestures { touchCount += 1 }
-            }
-            // Press and hold anywhere, then drag the window around the screen. This works even
-            // while the controls are hidden, so the PiP can always be moved.
+            // Tap to bring the controls back; press and hold, then drag anywhere to move the
+            // window. Both gestures live in one detector so neither cancels the other.
             .pointerInput(availableWidth, availableHeight, shownWidth) {
                 val freeXPx = freeX.toPx()
                 val freeYPx = freeY.toPx()
-                detectDragGesturesAfterLongPress { change, dragAmount ->
-                    change.consume()
+                fun moveBy(dx: Float, dy: Float) {
                     MiniPlayerRepository.setPositionFraction(
                         MiniPlayerRepository.positionX.value +
-                            if (freeXPx > 0f) dragAmount.x / freeXPx else 0f,
+                            if (freeXPx > 0f) dx / freeXPx else 0f,
                         MiniPlayerRepository.positionY.value +
-                            if (freeYPx > 0f) dragAmount.y / freeYPx else 0f,
+                            if (freeYPx > 0f) dy / freeYPx else 0f,
                     )
+                }
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    val longPress = awaitLongPressOrCancellation(down.id)
+                    if (longPress == null) {
+                        // The pointer went up before the long-press timeout: a tap.
+                        touchCount += 1
+                        return@awaitEachGesture
+                    }
+                    longPress.consume()
                     touchCount += 1
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (change.positionChanged()) {
+                            val delta = change.positionChange()
+                            change.consume()
+                            moveBy(delta.x, delta.y)
+                        }
+                        if (!change.pressed) break
+                    }
                 }
             },
     ) {
