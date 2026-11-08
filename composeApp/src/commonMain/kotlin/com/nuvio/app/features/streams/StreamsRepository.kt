@@ -26,7 +26,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withTimeoutOrNull
 import nuvio.composeapp.generated.resources.*
 import org.jetbrains.compose.resources.getString
 import kotlinx.coroutines.launch
@@ -49,7 +51,36 @@ object StreamsRepository {
     ): String =
         "$type::$videoId::$season::$episode::$manualSelection"
 
-    fun load(type: String, videoId: String, parentMetaId: String? = null, season: Int? = null, episode: Int? = null, manualSelection: Boolean = false) {
+    /**
+     * Resolves the first playable stream without showing the stream picker. Used when a Live TV
+     * add-on item is sent straight to Multi-view. Returns null when no source produced a stream.
+     */
+    suspend fun resolveFirstPlayableStream(
+        type: String,
+        videoId: String,
+        parentMetaId: String? = null,
+        season: Int? = null,
+        episode: Int? = null,
+        timeoutMs: Long = 25_000L,
+    ): StreamItem? {
+        reload(
+            type = type,
+            videoId = videoId,
+            parentMetaId = parentMetaId,
+            season = season,
+            episode = episode,
+            manualSelection = false,
+            forceAutoPlay = true,
+        )
+        return withTimeoutOrNull(timeoutMs) {
+            _uiState.first { state ->
+                state.autoPlayStream != null ||
+                    (!state.isAnyLoading && !state.isDirectAutoPlayFlow)
+            }.autoPlayStream
+        }
+    }
+
+    fun load(type: String, videoId: String, parentMetaId: String? = null, season: Int? = null, episode: Int? = null, manualSelection: Boolean = false, forceAutoPlay: Boolean = false) {
         PluginRepository.setLocalPluginSearchPaused(false)
         load(
             type = type,
@@ -58,11 +89,12 @@ object StreamsRepository {
             season = season,
             episode = episode,
             manualSelection = manualSelection,
+            forceAutoPlay = forceAutoPlay,
             forceRefresh = false,
         )
     }
 
-    fun reload(type: String, videoId: String, parentMetaId: String? = null, season: Int? = null, episode: Int? = null, manualSelection: Boolean = false) {
+    fun reload(type: String, videoId: String, parentMetaId: String? = null, season: Int? = null, episode: Int? = null, manualSelection: Boolean = false, forceAutoPlay: Boolean = false) {
         PluginRepository.setLocalPluginSearchPaused(false)
         load(
             type = type,
@@ -71,11 +103,12 @@ object StreamsRepository {
             season = season,
             episode = episode,
             manualSelection = manualSelection,
+            forceAutoPlay = forceAutoPlay,
             forceRefresh = true,
         )
     }
 
-    private fun load(type: String, videoId: String, parentMetaId: String?, season: Int?, episode: Int?, manualSelection: Boolean, forceRefresh: Boolean) {
+    private fun load(type: String, videoId: String, parentMetaId: String?, season: Int?, episode: Int?, manualSelection: Boolean, forceAutoPlay: Boolean, forceRefresh: Boolean) {
         val pluginUiState = if (AppFeaturePolicy.pluginsEnabled) {
             PluginRepository.initialize()
             PluginRepository.uiState.value
@@ -89,7 +122,7 @@ object StreamsRepository {
             episode = episode,
             manualSelection = manualSelection,
         )
-        val requestKey = "$requestToken::pluginsGrouped=${pluginUiState.groupStreamsByRepository}"
+        val requestKey = "$requestToken::forceAutoPlay=$forceAutoPlay::pluginsGrouped=${pluginUiState.groupStreamsByRepository}"
         val currentState = _uiState.value
         if (
             !forceRefresh &&
@@ -109,9 +142,9 @@ object StreamsRepository {
         val debridSettings = DebridSettingsRepository.snapshot()
         val streamBadgeRules = StreamBadgeSettingsRepository.snapshot()
         val autoPlayMode = playerSettings.streamAutoPlayMode
-        val isAutoPlayEnabled = !manualSelection && autoPlayMode != StreamAutoPlayMode.MANUAL &&
+        val isAutoPlayEnabled = forceAutoPlay || (!manualSelection && autoPlayMode != StreamAutoPlayMode.MANUAL &&
             !(autoPlayMode == StreamAutoPlayMode.REGEX_MATCH &&
-                !StreamAutoPlayPolicy.isRegexSelectionConfigured(playerSettings.streamAutoPlayRegex))
+                !StreamAutoPlayPolicy.isRegexSelectionConfigured(playerSettings.streamAutoPlayRegex)))
 
         // Look up persisted binge group when both settings are enabled
         val persistedBingeGroup = if (
@@ -129,7 +162,7 @@ object StreamsRepository {
 
         // Enable direct auto-play flow if normal auto-play is enabled,
         // OR if we have a persisted binge group in MANUAL mode
-        val bingeGroupDirectFlow = !manualSelection &&
+        val bingeGroupDirectFlow = !forceAutoPlay && !manualSelection &&
             persistedBingeGroup != null &&
             autoPlayMode == StreamAutoPlayMode.MANUAL
         val isDirectAutoPlayFlow = isAutoPlayEnabled || bingeGroupDirectFlow
@@ -262,15 +295,15 @@ object StreamsRepository {
             fun evaluateAutoPlay(bingeGroupOnly: Boolean = false): StreamAutoPlayEvaluation =
                 StreamAutoPlaySelector.evaluateAutoPlayStream(
                     streams = _uiState.value.groups.flatMap { it.streams },
-                    mode = autoPlayMode,
+                    mode = if (forceAutoPlay) StreamAutoPlayMode.FIRST_STREAM else autoPlayMode,
                     regexPattern = playerSettings.streamAutoPlayRegex,
-                    source = playerSettings.streamAutoPlaySource,
+                    source = if (forceAutoPlay) StreamAutoPlaySource.ALL_SOURCES else playerSettings.streamAutoPlaySource,
                     installedAddonNames = installedAddonNames,
                     selectedAddons = playerSettings.streamAutoPlaySelectedAddons,
                     selectedPlugins = playerSettings.streamAutoPlaySelectedPlugins,
-                    preferredBingeGroup = persistedBingeGroup,
-                    preferBingeGroupInSelection = persistedBingeGroup != null,
-                    bingeGroupOnly = bingeGroupOnly,
+                    preferredBingeGroup = if (forceAutoPlay) null else persistedBingeGroup,
+                    preferBingeGroupInSelection = !forceAutoPlay && persistedBingeGroup != null,
+                    bingeGroupOnly = !forceAutoPlay && bingeGroupOnly,
                     debridEnabled = debridSettings.canResolvePlayableLinks,
                     activeResolverProviderId = debridSettings.activeResolverProviderId,
                 )
@@ -299,7 +332,7 @@ object StreamsRepository {
                 if (!isDirectAutoPlayFlow || autoSelectTriggered) return
 
                 // Try binge group + filename first (most precise), then infoHash
-                if (persistedBingeGroup != null && !timeoutElapsed) {
+                if (!forceAutoPlay && persistedBingeGroup != null && !timeoutElapsed) {
                     val allStreams = _uiState.value.groups.flatMap { it.streams }
                     // Filename match
                     if (persistedFilename != null) {
@@ -334,6 +367,7 @@ object StreamsRepository {
                 }
 
                 val earlyEvaluation = when {
+                    forceAutoPlay -> null
                     timeoutElapsed -> evaluateAutoPlay()
                     persistedBingeGroup != null -> evaluateAutoPlay(bingeGroupOnly = true)
                     else -> null
@@ -345,7 +379,7 @@ object StreamsRepository {
 
                 if (
                     _uiState.value.groups.areAutoPlaySourcesLoaded(
-                        source = playerSettings.streamAutoPlaySource,
+                        source = if (forceAutoPlay) StreamAutoPlaySource.ALL_SOURCES else playerSettings.streamAutoPlaySource,
                         installedAddonIds = installedAddonIds,
                     )
                 ) {
@@ -423,37 +457,47 @@ object StreamsRepository {
             updateAutoPlayAfterStreamsChanged()
 
             val timeoutJob = if (isDirectAutoPlayFlow) {
-                val timeoutSeconds = playerSettings.streamAutoPlayTimeoutSeconds
-                val isUnlimitedTimeout = timeoutSeconds == Int.MAX_VALUE
-                // Timeout semantics:
-                // - 0 (instant): timeoutElapsed immediately, full select on each response
-                // - 1-30 (bounded): wait the configured delay, then full select
-                // - unlimited (Int.MAX_VALUE): timeoutElapsed immediately, full select on each response,
-                //   with 60s hard fallback to stream picker
-                if (timeoutSeconds <= 0 || isUnlimitedTimeout) {
-                    timeoutElapsed = true
-                    // For unlimited: launch a hard 60s fallback to dismiss overlay
-                    if (isUnlimitedTimeout) {
-                        launch {
-                            delay(60_000L)
-                            if (!autoSelectTriggered) {
-                                settleAutoPlay(evaluateAutoPlay())
-                            }
-                        }
-                    } else {
-                        null
+                if (forceAutoPlay) {
+                    // Live TV add-on items must not wait on the picker: give the add-ons a
+                    // bounded window to return streams, then fall back to the picker only when
+                    // nothing playable was found.
+                    launch {
+                        delay(30_000L)
+                        if (!autoSelectTriggered) settleAutoPlay(evaluateAutoPlay())
                     }
                 } else {
-                    // Bounded timeout (1-30s)
-                    launch {
-                        delay(timeoutSeconds * 1_000L)
+                    val timeoutSeconds = playerSettings.streamAutoPlayTimeoutSeconds
+                    val isUnlimitedTimeout = timeoutSeconds == Int.MAX_VALUE
+                    // Timeout semantics:
+                    // - 0 (instant): timeoutElapsed immediately, full select on each response
+                    // - 1-30 (bounded): wait the configured delay, then full select
+                    // - unlimited (Int.MAX_VALUE): timeoutElapsed immediately, full select on each response,
+                    //   with 60s hard fallback to stream picker
+                    if (timeoutSeconds <= 0 || isUnlimitedTimeout) {
                         timeoutElapsed = true
-                        if (!autoSelectTriggered) {
-                            val allStreams = _uiState.value.groups.flatMap { it.streams }
-                            if (allStreams.isNotEmpty()) {
-                                val evaluation = evaluateAutoPlay()
-                                if (evaluation.stream != null || !evaluation.hasPendingDebridCandidate) {
-                                    settleAutoPlay(evaluation)
+                        // For unlimited: launch a hard 60s fallback to dismiss overlay
+                        if (isUnlimitedTimeout) {
+                            launch {
+                                delay(60_000L)
+                                if (!autoSelectTriggered) {
+                                    settleAutoPlay(evaluateAutoPlay())
+                                }
+                            }
+                        } else {
+                            null
+                        }
+                    } else {
+                        // Bounded timeout (1-30s)
+                        launch {
+                            delay(timeoutSeconds * 1_000L)
+                            timeoutElapsed = true
+                            if (!autoSelectTriggered) {
+                                val allStreams = _uiState.value.groups.flatMap { it.streams }
+                                if (allStreams.isNotEmpty()) {
+                                    val evaluation = evaluateAutoPlay()
+                                    if (evaluation.stream != null || !evaluation.hasPendingDebridCandidate) {
+                                        settleAutoPlay(evaluation)
+                                    }
                                 }
                             }
                         }

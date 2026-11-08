@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -59,6 +60,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -82,6 +84,7 @@ import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.core.ui.NuvioTokens
 import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.features.livetv.model.LiveChannel
+import com.nuvio.app.features.livetv.model.LiveTvClock
 import com.nuvio.app.features.livetv.ui.quickchannels.QuickChannelsSheet
 import com.nuvio.app.features.player.PlatformPlayerSurface
 import com.nuvio.app.features.player.PlayerEngineController
@@ -219,12 +222,18 @@ internal fun LiveTvMultiViewScreen(
                 },
                 onFullscreen = { id -> focusedId = if (focusedId == id) null else id },
                 onVolumeChange = { id, percent -> volumes[id] = percent },
-                modifier = Modifier.fillMaxSize(),
+                onTouch = { touchTick.value += 1 },
+                modifier = Modifier
+                    .fillMaxSize()
+                    // The always-visible toolbar sits above the grid instead of over it, so
+                    // each window's own top-right buttons stay reachable.
+                    .padding(top = 60.dp),
             )
         }
 
         AnimatedVisibility(
-            visible = chromeVisible,
+            // The top toolbar stays on screen at all times; only the per-window controls fade.
+            visible = true,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier
@@ -476,6 +485,7 @@ private fun MultiViewGrid(
     onSwap: (String) -> Unit,
     onFullscreen: (String) -> Unit,
     onVolumeChange: (String, Int) -> Unit,
+    onTouch: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     BoxWithConstraints(modifier = modifier) {
@@ -493,6 +503,7 @@ private fun MultiViewGrid(
                     chromeVisible = chromeVisible,
                     focused = focused,
                     swapSelected = swapSource == stream.id,
+                    swapMode = swapSource != null,
                     volumePercent = volumes[stream.id] ?: 100,
                     pauseAll = pauseAll,
                     soundAll = soundAll,
@@ -500,6 +511,7 @@ private fun MultiViewGrid(
                     onSwap = { onSwap(stream.id) },
                     onToggleFullscreen = { onFullscreen(stream.id) },
                     onVolumeChange = { percent -> onVolumeChange(stream.id, percent) },
+                    onTouch = onTouch,
                     modifier = Modifier
                         .offset(rect.x, rect.y)
                         .size(rect.width, rect.height)
@@ -517,6 +529,7 @@ private fun MultiViewPane(
     chromeVisible: Boolean,
     focused: Boolean,
     swapSelected: Boolean,
+    swapMode: Boolean,
     volumePercent: Int,
     pauseAll: Boolean,
     soundAll: Boolean,
@@ -524,6 +537,7 @@ private fun MultiViewPane(
     onSwap: () -> Unit,
     onToggleFullscreen: () -> Unit,
     onVolumeChange: (Int) -> Unit,
+    onTouch: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var error by remember(stream.id) { mutableStateOf<String?>(null) }
@@ -531,6 +545,10 @@ private fun MultiViewPane(
     var snapshot by remember(stream.id) { mutableStateOf(PlayerPlaybackSnapshot()) }
     var dragFraction by remember(stream.id) { mutableStateOf<Float?>(null) }
     var volumeMenu by remember(stream.id) { mutableStateOf(false) }
+    var retryCount by remember(stream.id) { mutableStateOf(0) }
+    var lastPositionMs by remember(stream.id) { mutableLongStateOf(-1L) }
+    var lastAdvanceAtMs by remember(stream.id) { mutableLongStateOf(LiveTvClock.nowMs()) }
+    val tapInteraction = remember(stream.id) { MutableInteractionSource() }
 
     fun applyVolume() {
         controller?.setVolume(if (soundAll) volumePercent / 100f else 0f)
@@ -539,6 +557,56 @@ private fun MultiViewPane(
     LaunchedEffect(soundAll, volumePercent) { applyVolume() }
     LaunchedEffect(pauseAll) {
         controller?.let { if (pauseAll) it.pause() else it.play() }
+    }
+    LaunchedEffect(controller) {
+        // A rebuilt player starts from a clean slate: don't let an old stall clock retry it.
+        lastPositionMs = -1L
+        lastAdvanceAtMs = LiveTvClock.nowMs()
+        retryCount = 0
+    }
+
+    // A live stream can stop advancing when its provider rotates tokens or drops the encoder.
+    // Keep track of the last real progress so a stalled pane can be re-prepared automatically.
+    LaunchedEffect(stream.id, snapshot.positionMs, snapshot.isPlaying) {
+        if (snapshot.isPlaying && snapshot.positionMs != lastPositionMs) {
+            lastPositionMs = snapshot.positionMs
+            lastAdvanceAtMs = LiveTvClock.nowMs()
+            retryCount = 0
+        }
+    }
+
+    // Errors are retried with a short backoff; a permanently dead URL gives up after a few tries.
+    LaunchedEffect(stream.id, error) {
+        val message = error ?: return@LaunchedEffect
+        if (retryCount >= 5) return@LaunchedEffect
+        kotlinx.coroutines.delay((1_500L shl retryCount.coerceAtMost(3)))
+        if (error == message) {
+            error = null
+            controller?.retry()
+            retryCount += 1
+            lastAdvanceAtMs = LiveTvClock.nowMs()
+        }
+    }
+
+    // While a live player reports it is playing but the position has not moved for a while,
+    // rebuild its connection. This keeps token-expired IPTV streams alive without a manual tap.
+    LaunchedEffect(stream.id, pauseAll) {
+        if (pauseAll) return@LaunchedEffect
+        while (true) {
+            kotlinx.coroutines.delay(5_000L)
+            val stuck = LiveTvClock.nowMs() - lastAdvanceAtMs
+            if (controller != null &&
+                !pauseAll &&
+                (
+                    (snapshot.isPlaying && stuck > 20_000L) ||
+                        (snapshot.isLoading && stuck > 25_000L)
+                    )
+            ) {
+                controller?.retry()
+                lastAdvanceAtMs = LiveTvClock.nowMs()
+                retryCount += 1
+            }
+        }
     }
 
     key(stream.id, refreshGeneration) {
@@ -556,6 +624,7 @@ private fun MultiViewPane(
                 resizeMode = PlayerResizeMode.Fit,
                 playWhenReady = !pauseAll,
                 allowConcurrentAudio = true,
+                interceptTouches = false,
                 modifier = Modifier.fillMaxSize(),
                 onControllerReady = { ready ->
                     controller = ready
@@ -564,6 +633,19 @@ private fun MultiViewPane(
                 },
                 onSnapshot = { snapshot = it },
                 onError = { error = it },
+            )
+
+            // The video itself is a tap target: it brings the window controls back, and while a
+            // swap is pending it picks this window as the other half of the swap.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = tapInteraction,
+                        indication = null,
+                    ) {
+                        if (swapMode) onSwap() else onTouch()
+                    },
             )
 
             AnimatedVisibility(

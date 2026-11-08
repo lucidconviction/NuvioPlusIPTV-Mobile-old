@@ -113,6 +113,8 @@ fun StreamsScreen(
     resumeProgressFraction: Float? = null,
     manualSelection: Boolean = false,
     startFromBeginning: Boolean = false,
+    /** Play the first working stream instead of showing the picker (used by Live TV add-ons). */
+    forceAutoPlay: Boolean = false,
     showLoadingScreen: Boolean = false,
     onStreamSelected: (stream: StreamItem, resumePositionMs: Long?, resumeProgressFraction: Float?) -> Unit = { _, _, _ -> },
     onStreamActionOpen: (
@@ -180,7 +182,7 @@ fun StreamsScreen(
     val effectiveResumePositionMs = resumeState.positionMs
     val effectiveResumeProgressFraction = resumeState.progressFraction
 
-    LaunchedEffect(type, videoId, seasonNumber, episodeNumber, manualSelection) {
+    LaunchedEffect(type, videoId, seasonNumber, episodeNumber, manualSelection, forceAutoPlay) {
         com.nuvio.app.features.livetv.ondemand.OnDemandStreams.rememberTitle(parentMetaId, videoId, title)
         StreamsRepository.load(
             type = type,
@@ -189,6 +191,7 @@ fun StreamsScreen(
             season = seasonNumber,
             episode = episodeNumber,
             manualSelection = manualSelection,
+            forceAutoPlay = forceAutoPlay,
         )
     }
 
@@ -224,6 +227,7 @@ fun StreamsScreen(
             season = seasonNumber,
             episode = episodeNumber,
             manualSelection = manualSelection,
+            forceAutoPlay = forceAutoPlay,
         )
     }
 

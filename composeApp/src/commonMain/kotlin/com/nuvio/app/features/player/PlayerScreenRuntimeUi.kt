@@ -237,6 +237,7 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                     initialPositionRequestKey = initialPositionRequestKey,
                     resizeMode = resizeMode,
                     playbackEngine = playbackEngineOverride ?: resolvedAutoEngine,
+                    interceptTouches = contentType != "youtube",
                     onInitialPositionHandled = { key, handled ->
                         if (active.value && playbackKey == activePlaybackKey && key == currentInitialPositionRequestKey()) {
                             initialSeekApplied = handled

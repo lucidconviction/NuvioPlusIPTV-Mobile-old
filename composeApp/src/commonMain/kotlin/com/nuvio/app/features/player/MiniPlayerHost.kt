@@ -13,10 +13,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.DragIndicator
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
@@ -73,6 +76,7 @@ internal fun MiniPlayerHost(
                     stream = current,
                     onExpand = { onExpand(current) },
                     availableWidth = maxWidth,
+                    availableHeight = maxHeight,
                 )
             }
         }
@@ -84,6 +88,7 @@ private fun MiniPlayerWindow(
     stream: MiniPlayerStream,
     onExpand: () -> Unit,
     availableWidth: Dp,
+    availableHeight: Dp,
 ) {
     var controller by remember { mutableStateOf<PlayerEngineController?>(null) }
     var snapshot by remember { mutableStateOf(PlayerPlaybackSnapshot()) }
@@ -96,6 +101,11 @@ private fun MiniPlayerWindow(
     val minWidth = MiniPlayerRepository.MinWidthDp
     val maxWidth = availableWidth.value.coerceAtLeast(minWidth)
     val shownWidth = widthDp.coerceIn(minWidth, maxWidth).dp
+    val shownHeight = shownWidth * 9f / 16f
+    val positionX by MiniPlayerRepository.positionX.collectAsStateWithLifecycle()
+    val positionY by MiniPlayerRepository.positionY.collectAsStateWithLifecycle()
+    val freeX = (availableWidth - shownWidth).coerceAtLeast(0.dp)
+    val freeY = (availableHeight - shownHeight).coerceAtLeast(0.dp)
 
     LaunchedEffect(touchCount) {
         controlsVisible = true
@@ -105,6 +115,7 @@ private fun MiniPlayerWindow(
 
     Box(
         modifier = Modifier
+            .offset(x = freeX * positionX, y = freeY * positionY)
             .width(shownWidth)
             .aspectRatio(16f / 9f)
             .background(Color.Black, RoundedCornerShape(NuvioTokens.Radius.lg))
@@ -125,6 +136,7 @@ private fun MiniPlayerWindow(
             resizeMode = PlayerResizeMode.Fit,
             playWhenReady = true,
             allowConcurrentAudio = true,
+            interceptTouches = false,
             modifier = Modifier.fillMaxSize(),
             onControllerReady = { ready ->
                 controller = ready
@@ -161,7 +173,31 @@ private fun MiniPlayerWindow(
                     .padding(start = NuvioTokens.Space.s8, end = NuvioTokens.Space.s2, top = 2.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Icon(
+                    Icons.Rounded.DragIndicator,
+                    contentDescription = "Drag to move",
+                    tint = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.size(14.dp),
+                )
+                Spacer(Modifier.width(2.dp))
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .pointerInput(availableWidth, availableHeight, shownWidth) {
+                            val freeXPx = freeX.toPx()
+                            val freeYPx = freeY.toPx()
+                            detectDragGestures { change, dragAmount ->
+                                change.consume()
+                                MiniPlayerRepository.setPositionFraction(
+                                    MiniPlayerRepository.positionX.value +
+                                        if (freeXPx > 0f) dragAmount.x / freeXPx else 0f,
+                                    MiniPlayerRepository.positionY.value +
+                                        if (freeYPx > 0f) dragAmount.y / freeYPx else 0f,
+                                )
+                                touchCount += 1
+                            }
+                        },
+                ) {
                     Text(
                         stream.title,
                         style = MaterialTheme.typography.labelSmall,

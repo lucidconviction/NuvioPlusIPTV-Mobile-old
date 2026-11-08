@@ -12,6 +12,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -155,6 +158,7 @@ import com.nuvio.app.features.livetv.ui.LiveTvManageScreen
 import com.nuvio.app.features.livetv.ui.multiview.LiveTvMultiViewScreen
 import com.nuvio.app.features.livetv.ui.multiview.MultiViewQuickNavBadge
 import com.nuvio.app.features.livetv.ui.multiview.MultiViewRepository
+import com.nuvio.app.features.livetv.ui.multiview.MultiViewStream
 import com.nuvio.app.features.livetv.ui.sports.SportsActions
 import com.nuvio.app.features.livetv.ui.sports.SportsGameScreen
 import com.nuvio.app.features.livetv.ui.sports.SportsLeagueScreen
@@ -166,6 +170,8 @@ import com.nuvio.app.features.livetv.record.LiveTvRecorder
 import com.nuvio.app.features.livetv.record.LiveTvRecording
 import com.nuvio.app.features.player.PlayerLaunch
 import com.nuvio.app.features.player.PlayerLaunchStore
+import com.nuvio.app.features.player.sanitizePlaybackHeaders
+import com.nuvio.app.features.player.sanitizePlaybackResponseHeaders
 import com.nuvio.app.features.player.MiniPlayerHost
 import com.nuvio.app.features.player.MiniPlayerRepository
 import com.nuvio.app.features.player.MiniPlayerStream
@@ -214,6 +220,7 @@ import com.nuvio.app.features.watchprogress.toContinueWatchingItem
 import com.nuvio.app.navigation.*
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import com.nuvio.app.features.servers.ServerPlayback
 import com.nuvio.app.features.servers.ServerRepository
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -1123,6 +1130,7 @@ internal fun MainAppContent(
             resumeProgressFraction: Float?,
             manualSelection: Boolean,
             startFromBeginning: Boolean,
+            forceAutoPlay: Boolean = false,
         ) {
             val targetResumePositionMs = if (startFromBeginning) 0L else (resumePositionMs ?: 0L)
             val targetResumeProgressFraction = if (startFromBeginning) null else resumeProgressFraction
@@ -1197,6 +1205,7 @@ internal fun MainAppContent(
                     resumeProgressFraction = targetResumeProgressFraction,
                     manualSelection = manualSelection,
                     startFromBeginning = startFromBeginning,
+                    forceAutoPlay = forceAutoPlay,
                 ),
             )
             navController.navigate(
@@ -1255,6 +1264,98 @@ internal fun MainAppContent(
                     resumeProgressFraction = resume?.progressFraction,
                     manualSelection = false,
                     startFromBeginning = false,
+                    forceAutoPlay = true,
+                )
+            }
+        }
+
+        /**
+         * Sends a channel from the Live TV list straight to the open Multi-view page.
+         */
+        fun addLiveChannelToMultiView(channel: LiveChannel) {
+            val added = MultiViewRepository.addChannel(channel)
+            NuvioToastController.show(
+                if (added) {
+                    "Added ${channel.name} to Multi-view"
+                } else {
+                    val max = MultiViewRepository.maxStreams.value
+                    if (MultiViewRepository.streams.value.size >= max) {
+                        "Multi-view is full ($max windows)"
+                    } else {
+                        "Already open in Multi-view"
+                    }
+                },
+            )
+        }
+
+        /**
+         * Sends a Live TV add-on item to the open Multi-view page: resolves the first playable
+         * stream (or first episode for a series) and adds it as a window, without opening the
+         * stream picker or the player.
+         */
+        fun addLiveTvAddonItemToMultiView(item: MetaPreview) {
+            coroutineScope.launch {
+                NuvioToastController.show("Finding a working stream for ${item.name}…")
+                var videoId = item.id
+                var seasonNumber: Int? = null
+                var episodeNumber: Int? = null
+
+                if (item.type.equals("series", ignoreCase = true)) {
+                    val details = withTimeoutOrNull(15_000L) {
+                        runCatching { MetaDetailsRepository.fetch(item.type, item.id) }.getOrNull()
+                    }
+                    val episode = details?.firstPlayableEpisode()
+                    if (episode != null) {
+                        videoId = episode.id.takeIf { it.isNotBlank() } ?: item.id
+                        seasonNumber = episode.season
+                        episodeNumber = episode.episode
+                    }
+                }
+
+                val resolved = StreamsRepository.resolveFirstPlayableStream(
+                    type = item.type,
+                    videoId = videoId,
+                    parentMetaId = item.id,
+                    season = seasonNumber,
+                    episode = episodeNumber,
+                )
+                val prepared = resolved?.let { stream ->
+                    if (!stream.needsServerPreparation) return@let stream
+                    runCatching { ServerPlayback.prepare(stream) }.getOrNull()
+                }
+                val url = prepared?.playableDirectUrl
+                if (prepared == null || url.isNullOrBlank()) {
+                    NuvioToastController.show("No working stream found for ${item.name}")
+                    return@launch
+                }
+                val added = MultiViewRepository.add(
+                    MultiViewStream(
+                        id = url,
+                        url = url,
+                        title = item.name,
+                        subtitle = prepared.streamSubtitle,
+                        logo = item.logo,
+                        headers = sanitizePlaybackHeaders(prepared.behaviorHints.proxyHeaders?.request),
+                        responseHeaders = sanitizePlaybackResponseHeaders(prepared.behaviorHints.proxyHeaders?.response),
+                        streamType = prepared.streamType,
+                        providerName = prepared.addonName,
+                        streamTitle = prepared.streamLabel,
+                        parentMetaId = item.id,
+                        parentMetaType = item.type,
+                        videoId = videoId,
+                    ),
+                )
+                NuvioToastController.show(
+                    if (added) {
+                        "Added ${item.name} to Multi-view"
+                    } else {
+                        val max = MultiViewRepository.maxStreams.value
+                        if (MultiViewRepository.streams.value.size >= max) {
+                            "Multi-view is full ($max windows)"
+                        } else {
+                            "Already open in Multi-view"
+                        }
+                    },
                 )
             }
         }
@@ -1712,9 +1813,11 @@ internal fun MainAppContent(
                                 onLiveTvGuideClick = { navController.navigate(LiveTvGuideRoute(liveTvGuideTitle)) },
                                 onLiveTvSportsClick = { navController.navigate(LiveTvSportsRoute(liveTvSportsTitle)) },
                                 onLiveTvMultiViewClick = { navController.navigate(LiveTvMultiViewRoute()) { launchSingleTop = true } },
+                                onLiveTvAddChannelToMultiView = ::addLiveChannelToMultiView,
                                 onLiveTvManageClick = { navController.navigate(LiveTvManageRoute(liveTvManageTitle)) },
                                 onLiveTvOpenAddonCatalog = openAddonCatalogAction,
                                 onLiveTvPlayAddonItem = ::openLiveTvAddonItem,
+                                onLiveTvAddonItemToMultiView = ::addLiveTvAddonItemToMultiView,
                                 onLiveTvOpenAddonSettings = { navController.navigate(AddonsSettingsRoute(addonsSettingsTitle)) },
                                 onLiveTvSettingsClick = {
                                     if (useNativeNavigation && !isTabletLayout) {
@@ -2405,9 +2508,9 @@ internal fun MainAppContent(
                     navController.navigate(PlayerRoute(launchId = launchId, title = stream.title))
                 },
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .navigationBarsPadding()
-                    .padding(end = 16.dp, bottom = 158.dp)
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(12.dp)
                     .zIndex(17f),
             )
 

@@ -210,12 +210,16 @@ fun LiveTvScreen(
     onOpenSports: () -> Unit = {},
     /** Opens the multi-view page. */
     onOpenMultiView: () -> Unit = {},
+    /** Sends a channel from the list straight to Multi-view. */
+    onAddChannelToMultiView: (LiveChannel) -> Unit = {},
     /** Opens Manage (reorder and show or hide groups and channels). */
     onOpenManage: () -> Unit = {},
     /** Opens an add-on catalog. */
     onOpenAddonCatalog: (manifestUrl: String, com.nuvio.app.features.addons.AddonCatalog) -> Unit = { _, _ -> },
     /** Plays a catalog item (MetaPreview) tapped inside an inline add-on folder. */
     onPlayAddonItem: (MetaPreview) -> Unit = {},
+    /** Sends an add-on item straight to the Multi-view page. */
+    onAddonItemToMultiView: (MetaPreview) -> Unit = {},
     /** Opens the add-on settings / manage screen. */
     onOpenAddonSettings: () -> Unit = {},
 ) {
@@ -451,6 +455,7 @@ fun LiveTvScreen(
                             AddonsCatalogInlineSection(
                                 onOpenSettings = { onOpenAddonSettings() },
                                 onPlayItem = onPlayAddonItem,
+                                onAddToMultiView = onAddonItemToMultiView,
                             )
                         }
                     } else {
@@ -514,6 +519,7 @@ fun LiveTvScreen(
             customGroups = state.customGroups,
             onDismiss = { sheetChannel = null },
             onPlay = { onPlayChannel(channel, nowNext[channel.key]?.now?.title) },
+            onAddToMultiView = { onAddChannelToMultiView(channel) },
             onWatchFromStart = nowNext[channel.key]?.now
                 ?.takeIf { LiveTvCatchup.canWatchFromStart(channel, it, now) }
                 ?.let { program -> { onPlayCatchup(channel, program) } },
@@ -912,6 +918,7 @@ private fun QuickChannelInlineRow(
 private fun AddonsCatalogInlineSection(
     onOpenSettings: () -> Unit,
     onPlayItem: (MetaPreview) -> Unit,
+    onAddToMultiView: (MetaPreview) -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio.colors
     // Lazy-load addons only when this section enters the composition (user scrolls here).
@@ -956,6 +963,7 @@ private fun AddonsCatalogInlineSection(
                                 expanded = isCatExpanded,
                                 onToggle = { expandedCatalogs[catalogKey] = !isCatExpanded },
                                 onPlayItem = onPlayItem,
+                                onAddToMultiView = onAddToMultiView,
                             )
                         }
                     }
@@ -1190,6 +1198,7 @@ private fun ExpandableCatalogSection(
     expanded: Boolean,
     onToggle: () -> Unit,
     onPlayItem: (MetaPreview) -> Unit,
+    onAddToMultiView: (MetaPreview) -> Unit,
 ) {
     val catalogState = remember { mutableStateOf(CatalogUiState()) }
 
@@ -1235,6 +1244,7 @@ private fun ExpandableCatalogSection(
         CatalogItemsList(
             uiState = catalogState.value,
             onPlayItem = onPlayItem,
+            onAddToMultiView = onAddToMultiView,
         )
     }
 }
@@ -1245,6 +1255,7 @@ private fun ExpandableCatalogSection(
 private fun CatalogItemsList(
     uiState: CatalogUiState,
     onPlayItem: (MetaPreview) -> Unit,
+    onAddToMultiView: (MetaPreview) -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio.colors
 
@@ -1285,7 +1296,11 @@ private fun CatalogItemsList(
                 // Plain rows: this section lives inside the screen's LazyColumn, so content is
                 // laid out as a normal list instead of a nested lazy grid.
                 uiState.items.forEach { item ->
-                    AddonItemRow(item = item, onClick = { onPlayItem(item) })
+                    AddonItemRow(
+                        item = item,
+                        onClick = { onPlayItem(item) },
+                        onAddToMultiView = { onAddToMultiView(item) },
+                    )
                 }
             }
         }
@@ -1294,10 +1309,12 @@ private fun CatalogItemsList(
 
 // ─── Add-on content row (plays in the player) ─────────────────────────────────────────────
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AddonItemRow(
     item: MetaPreview,
     onClick: () -> Unit,
+    onAddToMultiView: (() -> Unit)? = null,
 ) {
     val tokens = MaterialTheme.nuvio.colors
     val artwork = item.landscapePoster ?: item.poster ?: item.banner
@@ -1305,17 +1322,22 @@ private fun AddonItemRow(
         item.releaseInfo?.takeIf { it.isNotBlank() }?.let { add(it) }
         item.type.takeIf { it.isNotBlank() }?.let { add(it.replaceFirstChar { c -> c.uppercaseChar() }) }
     }.joinToString("  ·  ").ifBlank { item.description.orEmpty() }
+    var menuOpen by remember { mutableStateOf(false) }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(NuvioTokens.Radius.xl))
-            .background(tokens.surface)
-            .clickable(onClick = onClick)
-            .padding(horizontal = NuvioTokens.Space.s10, vertical = NuvioTokens.Space.s10),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s12),
-    ) {
+    Box {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(NuvioTokens.Radius.xl))
+                .background(tokens.surface)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = { menuOpen = true },
+                )
+                .padding(horizontal = NuvioTokens.Space.s10, vertical = NuvioTokens.Space.s10),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s12),
+        ) {
         Box(
             modifier = Modifier
                 .width(64.dp)
@@ -1356,6 +1378,25 @@ private fun AddonItemRow(
                     color = tokens.textMuted,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        }
+        Menu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            MenuItem(
+                text = "Play",
+                onClick = {
+                    menuOpen = false
+                    onClick()
+                },
+            )
+            if (onAddToMultiView != null) {
+                MenuItem(
+                    text = "Multi-view",
+                    onClick = {
+                        menuOpen = false
+                        onAddToMultiView()
+                    },
                 )
             }
         }

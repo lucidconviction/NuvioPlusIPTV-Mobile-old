@@ -129,6 +129,7 @@ actual fun PlatformPlayerSurface(
     playbackEngine: AndroidPlaybackEngine?,
     useNativeController: Boolean,
     allowConcurrentAudio: Boolean,
+    interceptTouches: Boolean,
     onInitialPositionHandled: (key: String, handled: Boolean) -> Unit,
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
@@ -168,6 +169,7 @@ actual fun PlatformPlayerSurface(
             resizeMode = resizeMode,
             useNativeController = useNativeController,
             allowConcurrentAudio = allowConcurrentAudio,
+            interceptTouches = interceptTouches,
             onInitialPositionHandled = onInitialPositionHandled,
             onControllerReady = onControllerReady,
             onSnapshot = onSnapshot,
@@ -188,6 +190,7 @@ actual fun PlatformPlayerSurface(
                 playWhenReady = playWhenReady,
                 resizeMode = resizeMode,
                 allowConcurrentAudio = allowConcurrentAudio,
+                interceptTouches = interceptTouches,
                 videoOutput = playerSettings.androidLibmpvVideoOutput,
                 hardwareDecodingEnabled = playerSettings.androidLibmpvHardwareDecodingEnabled,
                 yuv420pEnabled = playerSettings.androidLibmpvYuv420pEnabled,
@@ -203,6 +206,22 @@ actual fun PlatformPlayerSurface(
 private enum class ResolvedAndroidPlaybackEngine {
     ExoPlayer,
     Libmpv,
+}
+
+/**
+ * PlayerView only: when [handlesTouches] is false it lets touch events fall through to the
+ * Compose tree, so Compose controls drawn over the video (multi-view panes, the in-app PiP and
+ * the player's overlay buttons) can be tapped. The full player leaves it true so its own tap,
+ * double-tap and drag gestures keep working over the video.
+ */
+private class NuvioPlayerView(context: android.content.Context) : PlayerView(context) {
+    var handlesTouches: Boolean = true
+
+    override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean =
+        handlesTouches && super.dispatchTouchEvent(event)
+
+    override fun onTouchEvent(event: android.view.MotionEvent): Boolean =
+        handlesTouches && super.onTouchEvent(event)
 }
 
 private fun AndroidPlaybackEngine.initialAndroidEngine(): ResolvedAndroidPlaybackEngine =
@@ -229,6 +248,7 @@ private fun ExoPlayerSurface(
     resizeMode: PlayerResizeMode,
     useNativeController: Boolean,
     allowConcurrentAudio: Boolean,
+    interceptTouches: Boolean,
     onInitialPositionHandled: (key: String, handled: Boolean) -> Unit,
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
@@ -1158,8 +1178,9 @@ private fun ExoPlayerSurface(
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { viewContext ->
-                PlayerView(viewContext).apply {
+                NuvioPlayerView(viewContext).apply {
                     useController = useNativeController
+                    handlesTouches = interceptTouches
                     layoutParams = android.view.ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)
                     player = exoPlayer
                     keepScreenOn = exoPlayer.shouldKeepPlayerScreenOn()
@@ -1190,6 +1211,7 @@ private fun ExoPlayerSurface(
             update = { playerView ->
                 playerView.player = exoPlayer
                 playerView.useController = useNativeController
+                playerView.handlesTouches = interceptTouches
                 playerView.resizeMode = resizeMode.toExoResizeMode()
                 playerViewRef = playerView
                 sidecarController.bindSubtitleView(playerView.subtitleView)
@@ -1219,6 +1241,7 @@ private fun LibmpvPlayerSurface(
     playWhenReady: Boolean,
     resizeMode: PlayerResizeMode,
     allowConcurrentAudio: Boolean,
+    interceptTouches: Boolean,
     videoOutput: AndroidLibmpvVideoOutput,
     hardwareDecodingEnabled: Boolean,
     yuv420pEnabled: Boolean,
@@ -1513,6 +1536,11 @@ private fun LibmpvPlayerSurface(
                     yuv420pEnabled = yuv420pEnabled,
                 ).apply {
                     layoutParams = android.view.ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)
+                    if (!interceptTouches) {
+                        isClickable = false
+                        isFocusable = false
+                        setOnTouchListener { _, _ -> false }
+                    }
                     keepScreenOn = false
                     runCatching {
                         Utils.copyAssets(viewContext)
@@ -1526,6 +1554,13 @@ private fun LibmpvPlayerSurface(
             },
             update = { view ->
                 playerViewRef = view
+                if (!interceptTouches) {
+                    view.isClickable = false
+                    view.isFocusable = false
+                    view.setOnTouchListener { _, _ -> false }
+                } else {
+                    view.setOnTouchListener(null)
+                }
                 view.applyResizeMode(resizeMode)
             },
             onRelease = { view ->

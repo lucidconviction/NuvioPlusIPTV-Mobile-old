@@ -44,6 +44,19 @@ object MiniPlayerRepository {
     /** The user-chosen window width, kept while streams are swapped and the window is reopened. */
     val widthDp: StateFlow<Float> = _widthDp.asStateFlow()
 
+    // Where the window sits in the free area, 0..1 on each axis (1,1 is bottom-end). Fractions
+    // keep the position sensible after a rotation or on a different screen size.
+    private val _positionX = MutableStateFlow(1f)
+    val positionX: StateFlow<Float> = _positionX.asStateFlow()
+
+    private val _positionY = MutableStateFlow(1f)
+    val positionY: StateFlow<Float> = _positionY.asStateFlow()
+
+    fun setPositionFraction(x: Float, y: Float) {
+        _positionX.value = x.coerceIn(0f, 1f)
+        _positionY.value = y.coerceIn(0f, 1f)
+    }
+
     fun show(stream: MiniPlayerStream) {
         if (stream.url.isBlank()) return
         _stream.value = stream

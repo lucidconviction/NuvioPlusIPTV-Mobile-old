@@ -19,6 +19,8 @@ data class StreamLaunch(
     val resumeProgressFraction: Float? = null,
     val manualSelection: Boolean = false,
     val startFromBeginning: Boolean = false,
+    /** The add-on entry point wants the first working stream played without showing the picker. */
+    val forceAutoPlay: Boolean = false,
 )
 
 object StreamLaunchStore {

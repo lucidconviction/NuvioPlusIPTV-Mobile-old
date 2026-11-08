@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Schedule
@@ -83,6 +84,8 @@ internal fun ChannelActionsSheet(
     customGroups: List<CustomGroup>,
     onDismiss: () -> Unit,
     onPlay: () -> Unit,
+    /** Sends this channel to the open Multi-view page. */
+    onAddToMultiView: (() -> Unit)? = null,
     /** Set when the show on now can be restarted from its beginning (catch-up). */
     onWatchFromStart: (() -> Unit)? = null,
     /** More rows, after Play (recordings and the like). */
@@ -111,6 +114,13 @@ internal fun ChannelActionsSheet(
             }
             NuvioBottomSheetDivider()
             NuvioBottomSheetActionRow(title = stringResource(Res.string.action_play), icon = Icons.Filled.PlayArrow, onClick = { close(onPlay) })
+            if (onAddToMultiView != null) {
+                NuvioBottomSheetActionRow(
+                    title = "Multi-view",
+                    icon = Icons.Filled.GridView,
+                    onClick = { close(onAddToMultiView) },
+                )
+            }
             if (onWatchFromStart != null) {
                 NuvioBottomSheetActionRow(title = stringResource(Res.string.livetv_watch_from_start), icon = Icons.Filled.Replay, onClick = { close(onWatchFromStart) })
             }

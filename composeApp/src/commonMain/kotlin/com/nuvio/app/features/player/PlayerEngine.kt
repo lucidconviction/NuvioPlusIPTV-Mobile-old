@@ -87,6 +87,12 @@ expect fun PlatformPlayerSurface(
     useNativeController: Boolean = false,
     /** True for panes that must keep playing beside other players (multi-view, in-app PiP). */
     allowConcurrentAudio: Boolean = false,
+    /**
+     * Whether the native player view should handle touches. Leave true for the full player so
+     * tap gestures keep working; set false when Compose controls are drawn over the video
+     * (multi-view panes, the in-app PiP, the YouTube More Videos button).
+     */
+    interceptTouches: Boolean = true,
     onInitialPositionHandled: (key: String, handled: Boolean) -> Unit = { _, _ -> },
     onControllerReady: (PlayerEngineController) -> Unit,
     onSnapshot: (PlayerPlaybackSnapshot) -> Unit,
