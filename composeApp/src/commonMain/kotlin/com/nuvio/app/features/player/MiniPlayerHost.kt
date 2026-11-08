@@ -7,7 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -120,11 +121,26 @@ private fun MiniPlayerWindow(
             .aspectRatio(16f / 9f)
             .background(Color.Black, RoundedCornerShape(NuvioTokens.Radius.lg))
             .border(1.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(NuvioTokens.Radius.lg))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = { touchCount += 1 },
-            ),
+            // Tap anywhere to bring the controls back.
+            .pointerInput(availableWidth, availableHeight, shownWidth) {
+                detectTapGestures { touchCount += 1 }
+            }
+            // Press and hold anywhere, then drag the window around the screen. This works even
+            // while the controls are hidden, so the PiP can always be moved.
+            .pointerInput(availableWidth, availableHeight, shownWidth) {
+                val freeXPx = freeX.toPx()
+                val freeYPx = freeY.toPx()
+                detectDragGesturesAfterLongPress { change, dragAmount ->
+                    change.consume()
+                    MiniPlayerRepository.setPositionFraction(
+                        MiniPlayerRepository.positionX.value +
+                            if (freeXPx > 0f) dragAmount.x / freeXPx else 0f,
+                        MiniPlayerRepository.positionY.value +
+                            if (freeYPx > 0f) dragAmount.y / freeYPx else 0f,
+                    )
+                    touchCount += 1
+                }
+            },
     ) {
         PlatformPlayerSurface(
             sourceUrl = stream.url,
@@ -180,24 +196,7 @@ private fun MiniPlayerWindow(
                     modifier = Modifier.size(14.dp),
                 )
                 Spacer(Modifier.width(2.dp))
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .pointerInput(availableWidth, availableHeight, shownWidth) {
-                            val freeXPx = freeX.toPx()
-                            val freeYPx = freeY.toPx()
-                            detectDragGestures { change, dragAmount ->
-                                change.consume()
-                                MiniPlayerRepository.setPositionFraction(
-                                    MiniPlayerRepository.positionX.value +
-                                        if (freeXPx > 0f) dragAmount.x / freeXPx else 0f,
-                                    MiniPlayerRepository.positionY.value +
-                                        if (freeYPx > 0f) dragAmount.y / freeYPx else 0f,
-                                )
-                                touchCount += 1
-                            }
-                        },
-                ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         stream.title,
                         style = MaterialTheme.typography.labelSmall,
