@@ -1,6 +1,7 @@
 package com.nuvio.app.features.livetv.ui.quickchannels
 
 import com.nuvio.app.core.network.createApiHttpClient
+import com.nuvio.app.features.livetv.data.StreamUrls
 import com.nuvio.app.features.livetv.data.XtreamClient
 import com.nuvio.app.features.livetv.model.LiveChannel
 import io.ktor.client.HttpClient
@@ -9,6 +10,7 @@ import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpHeaders
 import io.ktor.utils.io.readAvailable
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -92,9 +94,16 @@ internal object QuickStreamChecker {
      * Probes every distinct channel in [channels] and returns the final status for each URL.
      * [onResult] is invoked as each URL finishes checking (including cached results), so callers
      * can show progress instead of waiting for the whole batch.
+     *
+     * [assumeAliveOnUnknown] keeps Quick Channels from hiding a stream after a timeout (a working
+     * channel is worth more than a hidden one there). Stream validation passes `false`: an
+     * explicit check should report an unreachable stream as failing, and a later re-check puts
+     * it back if it answers again.
      */
     suspend fun checkBatch(
         channels: List<LiveChannel>,
+        forceRefresh: Boolean = false,
+        assumeAliveOnUnknown: Boolean = true,
         onResult: (url: String, alive: Boolean) -> Unit = { _, _ -> },
     ): Map<String, Boolean> {
         val uniqueChannels = channels
@@ -108,7 +117,7 @@ internal object QuickStreamChecker {
         coroutineScope {
             uniqueChannels.forEach { channel ->
                 launch {
-                    val alive = semaphore.withPermit { checkChannel(channel) }
+                    val alive = semaphore.withPermit { checkChannel(channel, forceRefresh, assumeAliveOnUnknown) }
                     resultsLock.withLock { results[channel.url] = alive }
                     onResult(channel.url, alive)
                 }
@@ -137,17 +146,23 @@ internal object QuickStreamChecker {
         )
     }
 
-    private suspend fun checkChannel(channel: LiveChannel): Boolean {
+    private suspend fun checkChannel(
+        channel: LiveChannel,
+        forceRefresh: Boolean = false,
+        assumeAliveOnUnknown: Boolean = true,
+    ): Boolean {
+        // A link with no usable address can never play; don't send it to the network.
+        if (!StreamUrls.isUsable(channel.url)) return false
         val key = cacheKey(channel)
         val now = System.currentTimeMillis()
         val cached = cacheLock.withLock { cache[key] }
-        if (cached != null && now - cached.checkedAt < TTL_MS) return cached.alive
-        val alive = probe(channel)
+        if (!forceRefresh && cached != null && now - cached.checkedAt < TTL_MS) return cached.alive
+        val alive = probe(channel, assumeAliveOnUnknown)
         cacheLock.withLock { cache[key] = Entry(alive, now) }
         return alive
     }
 
-    private suspend fun probe(channel: LiveChannel): Boolean {
+    private suspend fun probe(channel: LiveChannel, assumeAliveOnUnknown: Boolean): Boolean {
         val headers = requestHeaders(channel)
 
         // Range first: it stops the server from pushing a whole live buffer at us. Some panels
@@ -164,9 +179,10 @@ internal object QuickStreamChecker {
         return when (plain?.let(::verdictOf)) {
             Verdict.Alive -> true
             Verdict.Dead -> false
-            // Inconclusive twice: do not hide a stream that may still play. Slow or temporarily
-            // unreachable providers are the main source of false "dead" results.
-            Verdict.Unknown, null -> true
+            // Inconclusive twice. Quick Channels keeps the stream visible (a slow or temporarily
+            // unreachable provider may still play), while an explicit validation run reports it
+            // as failing so dead links are actually found; a re-check restores it if it answers.
+            Verdict.Unknown, null -> assumeAliveOnUnknown
         }
     }
 
@@ -193,7 +209,7 @@ internal object QuickStreamChecker {
         headers: Map<String, String>,
         range: String?,
         timeoutMs: Long,
-    ): ProbeResponse? = runCatching {
+    ): ProbeResponse? = try {
         withContext(Dispatchers.IO) {
             withTimeoutOrNull(timeoutMs) {
                 client.prepareGet(url) {
@@ -209,7 +225,12 @@ internal object QuickStreamChecker {
                 }
             }
         }
-    }.getOrNull()
+    } catch (e: CancellationException) {
+        // Cancelling a validation run (or leaving a screen) must stop the probes.
+        throw e
+    } catch (_: Exception) {
+        null
+    }
 
     private suspend fun readSample(resp: io.ktor.client.statement.HttpResponse): String {
         val body = resp.bodyAsChannel()

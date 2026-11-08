@@ -124,6 +124,7 @@ import com.nuvio.app.core.ui.nuvio
 import com.nuvio.app.features.livetv.data.LiveTvPreferences
 import com.nuvio.app.features.livetv.data.LiveTvRepository
 import com.nuvio.app.features.livetv.data.NowNext
+import com.nuvio.app.features.livetv.data.StreamValidationRepository
 import com.nuvio.app.features.livetv.model.ChannelGroup
 import com.nuvio.app.features.livetv.model.LiveChannel
 import com.nuvio.app.features.livetv.model.EpgProgram
@@ -262,6 +263,8 @@ fun LiveTvScreen(
     var sheetChannel by remember { mutableStateOf<LiveChannel?>(null) }
     var unlockGroup by remember { mutableStateOf<ChannelGroup?>(null) }
     var overflow by remember { mutableStateOf(false) }
+    var streamValidation by remember { mutableStateOf(false) }
+    val validation by StreamValidationRepository.state.collectAsStateWithLifecycle()
     val haptics = LocalHapticFeedback.current
 
     LaunchedEffect(scrollToTopRequests) {
@@ -373,6 +376,14 @@ fun LiveTvScreen(
                                 Menu(expanded = overflow, onDismissRequest = { overflow = false }) {
                                     MenuItem(text = stringResource(Res.string.livetv_manage_menu), onClick = { overflow = false; onOpenManage() })
                                     MenuItem(text = stringResource(Res.string.livetv_update_now), onClick = { overflow = false; LiveTvRepository.refreshAll(force = true) })
+                                    MenuItem(
+                                        text = if (validation.running) {
+                                            "Stream validation (${validation.checked}/${validation.total})"
+                                        } else {
+                                            "Stream validation"
+                                        },
+                                        onClick = { overflow = false; streamValidation = true },
+                                    )
                                 }
                             }
                         },
@@ -406,6 +417,22 @@ fun LiveTvScreen(
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
+                    }
+                    if (validation.running) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = NuvioTokens.Space.s8),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8),
+                        ) {
+                            NuvioLoadingIndicator(size = NuvioTokens.Space.s16)
+                            Text(
+                                "Checking streams ${validation.checked}/${validation.total}…",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = tokens.colors.textMuted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
             }
@@ -540,7 +567,9 @@ fun LiveTvScreen(
     }
     unlockGroup?.let { g -> UnlockGroupDialog(g.id, g.title, onDismiss = { unlockGroup = null }) }
 
-
+    if (streamValidation) {
+        StreamValidationSheet(onDismiss = { streamValidation = false })
+    }
 }
 
 /** Full Quick Channels section shown inline. */
@@ -549,7 +578,7 @@ private fun QuickChannelsInlineSection(
     onPlayChannel: (com.nuvio.app.features.livetv.model.LiveChannel) -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio.colors
-    val liveChannels by com.nuvio.app.features.livetv.data.LiveTvRepository.channels.collectAsStateWithLifecycle(initialValue = emptyList())
+    val liveChannels by com.nuvio.app.features.livetv.data.LiveTvRepository.displayChannels.collectAsStateWithLifecycle(initialValue = emptyList())
     val categories = QuickChannelList.getChannelCategories()
     var selectedCategory by remember { mutableStateOf(categories.firstOrNull() ?: "all") }
     var quickDataVersion by remember { mutableStateOf(0) }

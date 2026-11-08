@@ -78,7 +78,7 @@ fun QuickChannelsSheet(
     var selectedCategory by remember { mutableStateOf(QuickChannelList.getChannelCategories().first()) }
     val categories = QuickChannelList.getChannelCategories()
     var selectedQc by remember { mutableStateOf<QuickChannel?>(null) }
-    val liveChannels by LiveTvRepository.channels.collectAsStateWithLifecycle(initialValue = emptyList())
+    val liveChannels by LiveTvRepository.displayChannels.collectAsStateWithLifecycle(initialValue = emptyList())
     val validation = rememberQuickChannelMatchState(selectedQc, liveChannels)
 
     // Custom region/channel management state

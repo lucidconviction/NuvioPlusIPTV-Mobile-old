@@ -67,11 +67,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -210,6 +212,8 @@ internal fun LiveTvMultiViewScreen(
                     if (focusedId == id) focusedId = null
                 },
                 onSwap = { id ->
+                    // A swap needs a second, visible window: leave full screen first.
+                    if (focusedId != null) focusedId = null
                     val source = swapSource
                     when {
                         source == null -> swapSource = id
@@ -489,13 +493,17 @@ private fun MultiViewGrid(
     modifier: Modifier = Modifier,
 ) {
     BoxWithConstraints(modifier = modifier) {
-        streams.forEachIndexed { index, stream ->
+        // While one window is full screen, only that window is composed. Each player is a real
+        // Android surface, and a surface from a background pane is composited independently of
+        // Compose's zIndex, so it can paint over the focused window (and keep playing its audio).
+        val shown = if (focusedId == null) streams else streams.filter { it.id == focusedId }
+        shown.forEachIndexed { index, stream ->
             key(stream.id) {
                 val focused = stream.id == focusedId
                 val rect = if (focused) {
                     PaneRect(0.dp, 0.dp, maxWidth, maxHeight)
                 } else {
-                    paneRect(index, streams.size, layout, maxWidth, maxHeight)
+                    paneRect(index, shown.size, layout, maxWidth, maxHeight)
                 }
                 MultiViewPane(
                     stream = stream,
@@ -640,6 +648,7 @@ private fun MultiViewPane(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .zIndex(1f)
                     .clickable(
                         interactionSource = tapInteraction,
                         indication = null,
@@ -652,7 +661,9 @@ private fun MultiViewPane(
                 visible = chromeVisible,
                 enter = fadeIn(),
                 exit = fadeOut(),
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(2f),
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     // Top-right window actions: swap, full screen, close.
@@ -810,6 +821,7 @@ private fun MultiViewPane(
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .align(Alignment.Center)
+                        .zIndex(3f)
                         .background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(NuvioTokens.Radius.sm))
                         .padding(NuvioTokens.Space.s8),
                 )
@@ -826,21 +838,35 @@ private fun PaneIconButton(
     selected: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    IconButton(
-        onClick = onClick,
+    // A plain clickable Box instead of IconButton: Material enforces a 48dp minimum touch
+    // target, which in a small multi-view pane overlaps the neighbouring buttons and steals
+    // their taps. A weighted IconButton also squeezes the icon into the start of its cell.
+    // Here the whole cell is the target and the visible circle stays compact.
+    Box(
         modifier = modifier
-            .size(34.dp)
-            .background(
-                if (selected) Color.White else Color.Black.copy(alpha = 0.5f),
-                CircleShape,
+            .heightIn(min = 30.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                role = Role.Button,
+                onClick = onClick,
             ),
+        contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            icon,
-            contentDescription = description,
-            tint = if (selected) Color.Black else Color.White,
-            modifier = Modifier.size(NuvioTokens.Icon.sm),
-        )
+        Box(
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(if (selected) Color.White else Color.Black.copy(alpha = 0.55f))
+                .padding(NuvioTokens.Space.s6),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                icon,
+                contentDescription = description,
+                tint = if (selected) Color.Black else Color.White,
+                modifier = Modifier.size(NuvioTokens.Icon.sm),
+            )
+        }
     }
 }
 

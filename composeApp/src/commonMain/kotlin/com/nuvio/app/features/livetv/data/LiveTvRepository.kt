@@ -85,13 +85,20 @@ internal object LiveTvRepository {
 
     /**
      * The channel list with your renames, numbers, group names, the channel name editor and
-     * logo choices applied: what every screen shows.
+     * logo choices applied, and without streams that failed validation: what every screen shows.
      */
     val displayChannels: StateFlow<List<LiveChannel>> = combine(
-        _channels, prefs.userState, prefs.settings, _epgLogos,
-        prefs.playlists.map { list -> list.filter { it.logoSource == "epg" }.mapTo(HashSet()) { it.id } }.distinctUntilChanged()
-    ) { channels, user, s, logos, preferEpg ->
-        withPickedLogos(withLogos(named(channels, user, s), logos, preferEpg), user.channelLogos)
+        combine(
+            _channels, prefs.userState, prefs.settings, _epgLogos,
+            prefs.playlists.map { list -> list.filter { it.logoSource == "epg" }.mapTo(HashSet()) { it.id } }.distinctUntilChanged()
+        ) { channels, user, s, logos, preferEpg ->
+            withLogos(named(channels, user, s), logos, preferEpg)
+        },
+        prefs.userState,
+        prefs.validationFailed,
+    ) { channels, user, failed ->
+        val shown = if (failed.isEmpty()) channels else channels.filterNot { it.key in failed }
+        withPickedLogos(shown, user.channelLogos)
     }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     private var initialized = false
@@ -307,6 +314,14 @@ internal object LiveTvRepository {
             val exists = LiveTvFiles.exists(LiveTvDirs.PLAYLISTS, file)
             val stale = !exists || now - LiveTvFiles.lastModified(LiveTvDirs.PLAYLISTS, file) > settings.playlistRefreshHours.coerceAtLeast(1) * HOUR
             if (!(forcePlaylists || stale || pl.id in forceIds)) continue
+            // A provider can leave a malformed address behind. Skip that one source and keep
+            // updating the rest of the playlists instead of failing the whole refresh.
+            if (!StreamUrls.isUsable(pl.resolvedUrl())) {
+                prefs.updatePlaylists { list ->
+                    list.map { if (it.id == pl.id) it.copy(lastError = INVALID_ADDRESS) else it }
+                }
+                continue
+            }
             setStatus(loading = true, message = "Updating playlist \"${pl.name}\"…")
             val result = runCatching {
                 if (pl.isXtream) downloadXtream(pl, file)
@@ -335,6 +350,14 @@ internal object LiveTvRepository {
             val stale = !exists || now - LiveTvFiles.lastModified(LiveTvDirs.EPG, file) > settings.epgRefreshHours.coerceAtLeast(1) * HOUR
             val forcedHere = target.sourceId in forceIds || target.playlistId in forceIds
             if (!(forceEpg || stale || forcedHere)) continue
+            if (!StreamUrls.isUsable(target.url)) {
+                if (target.sourceId != null) {
+                    prefs.updateEpgSources { list ->
+                        list.map { if (it.id == target.sourceId) it.copy(lastError = INVALID_ADDRESS) else it }
+                    }
+                }
+                continue
+            }
             setStatus(loading = true, message = "Downloading guide \"${target.name}\"…")
             val result = runCatching {
                 LiveTvFiles.download(target.url, LiveTvDirs.EPG, file, target.userAgent) { bytes ->
@@ -448,6 +471,9 @@ internal object LiveTvRepository {
             for (e in parsed.entries) {
                 // Many providers' M3U links also list every movie and episode: not TV channels.
                 if (isVodEntry(e.url)) continue
+                // A malformed link can never play. Skip just that entry; the rest of the
+                // playlist is still imported (and the source is not marked as failed).
+                if (!StreamUrls.isUsable(e.url)) continue
                 count++
                 val groupTitle = e.group?.ifBlank { null } ?: "Uncategorized"
                 val baseKey = "${pl.id}|${e.tvgId ?: ""}|${e.name}"
@@ -837,6 +863,7 @@ internal object LiveTvRepository {
     private const val STALE_CHECK_MS = 30L * 60L * 1000L
     private const val STALE_COOLDOWN_MS = 5L * 60L * 1000L
     private const val GUIDE_VERSION = 1
+    private const val INVALID_ADDRESS = "Skipped: that isn't a valid web address."
 
     private val PLACEHOLDER_TITLES = Regex(
         """(programming|program|programme|no information|no info|no program information|no programme information|""" +

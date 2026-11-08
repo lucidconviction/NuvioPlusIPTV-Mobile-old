@@ -231,6 +231,12 @@ internal object LiveTvKeys {
     const val quickChannels = "quick_channels"
     /** Multi-view: layouts the user saved (this device only), as JSON. */
     const val multiViewLayouts = "multiview_layouts"
+    /** Stream validation: channel keys whose stream failed the last check (this device only). */
+    const val validationFailed = "stream_validation_failed"
+    /** Stream validation: how many channels worked at the last check (this device only). */
+    const val validationWorking = "stream_validation_working"
+    /** Stream validation: when the last check finished (this device only). */
+    const val validationLastRun = "stream_validation_last_run"
 
     /** Separates the EPG source id from the channel id in a stored EPG assignment. */
     const val EPG_SEP = "\u0001"
@@ -678,6 +684,32 @@ internal open class LiveTvPreferencesStore {
             if (json.isNullOrBlank()) p.remove(LiveTvKeys.multiViewLayouts)
             else p[LiveTvKeys.multiViewLayouts] = PrefValue.Str(json)
         }
+    }
+
+    /** Channel keys whose stream failed the last validation run, kept on this device. */
+    val validationFailed: StateFlow<Set<String>> = _device
+        .map { it.strSet(LiveTvKeys.validationFailed) ?: emptySet() }
+        .distinctUntilChanged()
+        .stateIn(scope, SharingStarted.Eagerly, emptySet<String>())
+
+    fun currentValidationFailed(): Set<String> =
+        _device.value.strSet(LiveTvKeys.validationFailed) ?: emptySet()
+
+    fun saveValidationFailed(keys: Set<String>) = editDevice { p ->
+        if (keys.isEmpty()) p.remove(LiveTvKeys.validationFailed)
+        else p[LiveTvKeys.validationFailed] = keys
+    }
+
+    fun currentValidationWorking(): Int = _device.value.int(LiveTvKeys.validationWorking) ?: 0
+
+    fun saveValidationWorking(count: Int) = editDevice { p ->
+        p[LiveTvKeys.validationWorking] = count
+    }
+
+    fun currentValidationLastRun(): Long = _device.value.long(LiveTvKeys.validationLastRun) ?: 0L
+
+    fun saveValidationLastRun(atMs: Long) = editDevice { p ->
+        p[LiveTvKeys.validationLastRun] = atMs
     }
 
     val settings: StateFlow<LiveTvSettings> = _data.map { readSettings(it) }

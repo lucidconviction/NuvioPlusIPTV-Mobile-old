@@ -550,7 +550,7 @@ private fun MiniGuideRow(
 private fun PlayerQuickChannelsPanel(onSwitch: (LiveChannel, String?) -> Unit) {
     val tokens = MaterialTheme.nuvio
     val c = tokens.colors
-    val liveChannels by LiveTvRepository.channels.collectAsStateWithLifecycle(initialValue = emptyList())
+    val liveChannels by LiveTvRepository.displayChannels.collectAsStateWithLifecycle(initialValue = emptyList())
     val categories = QuickChannelList.getChannelCategories()
     var selectedCategory by remember { mutableStateOf(categories.firstOrNull() ?: "all") }
     val filteredQc = remember(selectedCategory) { QuickChannelList.getChannelsForCategory(selectedCategory) }
