@@ -360,8 +360,16 @@ val generateRuntimeConfigs = tasks.register<GenerateRuntimeConfigsTask>("generat
     localPropertiesFile.set(rootProject.layout.projectDirectory.file("local.properties"))
     appVersionName.set(releaseAppVersionName)
     appVersionCode.set(releaseAppVersionCode)
-    supabaseUrl.set(runtimeConfigValue("NUVIO_SUPABASE_URL"))
-    supabaseAnonKey.set(runtimeConfigValue("NUVIO_SUPABASE_ANON_KEY"))
+    // Official Nuvio cloud defaults, published at https://nuvio.tv/docs/nuvio-public-api.md.
+    // local.properties or the matching environment variable can still override them for a
+    // self-hosted backend.
+    supabaseUrl.set(runtimeConfigValue("NUVIO_SUPABASE_URL", "https://api.nuvio.tv"))
+    supabaseAnonKey.set(
+        runtimeConfigValue(
+            "NUVIO_SUPABASE_ANON_KEY",
+            "sb_publishable_1Clq8rlTVACkdcZuqr6_AD__xUUC_EN",
+        ),
+    )
     supabaseFallbackUrl.set(runtimeConfigValue("NUVIO_SUPABASE_FALLBACK_URL"))
     sentryDsn.set(runtimeConfigValue("SENTRY_DSN"))
     tmdbApiKey.set(runtimeConfigValue("TMDB_API_KEY"))
