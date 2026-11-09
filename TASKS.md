@@ -9,6 +9,7 @@ constraints, acceptance criteria, and verification commands.
 | ID | Status | Priority | Task |
 |----|--------|----------|------|
 | TASK-2026-11-07-SPORTS-REPLAYS | done | P2 | Sports Replays section on the Sports page (YouTube-only) |
+| TASK-2026-11-09-MUSIC | done | P1 | Music page, YouTube music videos, audio/video toggles, Music nav tab |
 
 ---
 
@@ -299,3 +300,66 @@ Manual checks (emulator or device):
 - Existing YouTube host/player: `YouTubeHost.kt`; `MainAppContent.kt` `openYouTubeVideo` (~997).
 - Secure storage reference: `MdbListAuthPersistence.android.kt` and `MdbListAuthPersistence.ios.kt`.
 - Settings sheet: `SportsFollowing.kt` `SportsSettingsSheet` (~411).
+
+---
+
+## TASK-2026-11-09-MUSIC — Music page with YouTube videos and audio/video modes
+
+- **Status:** done — Music tab added before Settings, YouTube search rows, centred video/audio player
+  with shared Video/Audio toggles.
+- **Created:** 2026-11-09
+- **Project:** `/Users/robbdeeze/Documents/projects/NuvioPlusIPTV-Mobile-old-main`
+- **Reference app:** https://github.com/lucidconviction/PlayTorrioV3.git (`lib/pages/music/music_page.dart`)
+- **Depends on:** the Android YouTube engine already used by the YouTube tab and Sports replays.
+
+### Goal
+
+Bring the PlayTorrio music page to Nuvio in Nuvio's own visual language: browse, search and play
+music, with a **Video / Audio** switch on the music page and again in the player. Music videos are
+found and resolved through the internal YouTube engine; the video sits in a centred in-app
+picture-in-picture-style window, never the full-screen player and never an external app.
+
+### Navigation
+
+- Add a **Music** tab to the navigation bar **immediately before Settings** (after Live TV when it
+  is shown). The same order is used by the floating navigation bar, the classic bottom bar and
+  tablet navigation.
+- The tab is hidden automatically when the YouTube engine is unavailable.
+
+### Music page
+
+- Header with the Music title, search box and the main **Video / Audio** toggle.
+- Featured rows from YouTube searches, for example Trending, Pop, Hip-hop, Rock, Electronic,
+  Chill/Lofi, Country, Latin, K-Pop and R&B.
+- Each card: 16:9 thumbnail, title, artist/channel and duration badge where available.
+- Search returns tracks, with a clear empty/loading/error state.
+- Tapping a track opens the music player and keeps the rest of the row as the queue.
+- Do not use Deezer, Qobuz, Spotify or another music API/key; YouTube is the source.
+
+### Music player
+
+- Centred 16:9 video window with rounded corners, like the app's in-app PiP, on a Nuvio-themed
+  background. It is not the full-screen player route.
+- Audio mode shows the cover art instead of the video while audio keeps playing.
+- **Video / Audio** toggle in the player, sharing the same state as the toggle on the music page.
+- Play/pause, seek, previous/next, title/artist and a close/back control.
+- Resolving uses the same YouTube engine as the YouTube tab. No separate resolver or API key.
+- If YouTube cannot resolve a track, show a readable message and keep the page usable.
+
+### Constraints
+
+- Keep our existing YouTube tab, Sports replays, Multi-view/PiP, stream validation and Quick
+  Channels untouched.
+- Use Nuvio tokens (`MaterialTheme.nuvio`), `NuvioScreenHeader`-style typography and the app's
+  existing poster/card shapes.
+- No new heavy dependencies.
+- The player must follow the device's current orientation; do not force landscape.
+
+### Verification
+
+- Music tab appears exactly before Settings.
+- Featured rows and search load from YouTube, with a one-hour search cache.
+- Video mode plays a YouTube music video in the centred window.
+- Audio mode keeps playing with the cover shown; toggling either place updates the other.
+- Rotating the device does not change orientation when a video is playing.
+- `:composeApp:compileAndroidMain` and `:androidApp:assembleFullDebug` pass.

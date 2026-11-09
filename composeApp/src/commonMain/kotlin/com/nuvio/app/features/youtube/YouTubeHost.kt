@@ -21,6 +21,15 @@ data class YouTubeVideoCard(
     val badge: String? = null,
 )
 
+/** A resolved YouTube stream, ready for Nuvio's own player. */
+data class YouTubeResolvedVideo(
+    val url: String,
+    val title: String,
+    val poster: String?,
+    val videoId: String,
+    val startPositionMs: Long = 0L,
+)
+
 /**
  * The YouTube page lives in Android-only code (it needs SmartTube's engine). The Android app sets
  * [screen] at start-up; on other platforms it stays empty and the tab is not shown.
@@ -91,6 +100,12 @@ object YouTubeHost {
      * won't play the video.
      */
     var playVideo: (suspend (video: YouTubeVideoCard, queue: List<YouTubeVideoCard>) -> Result<Unit>)? = null
+
+    /**
+     * Resolves a video by id to a stream URL, without opening the YouTube page. Used by Home's
+     * Continue Watching and the Music page. Set on Android.
+     */
+    var resolveVideo: (suspend (videoId: String, title: String, poster: String?, startPositionMs: Long) -> Result<YouTubeResolvedVideo>)? = null
 
     /** True when the Sports page can show YouTube videos. */
     val videosAvailable: Boolean get() = searchVideos != null && playVideo != null

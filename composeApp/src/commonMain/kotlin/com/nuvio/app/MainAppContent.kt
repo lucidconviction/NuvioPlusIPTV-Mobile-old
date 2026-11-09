@@ -488,6 +488,7 @@ internal fun MainAppContent(
             AppScreenTab.Library -> libraryScrollToTopRequests.tryEmit(Unit)
             AppScreenTab.YouTube -> Unit
             AppScreenTab.LiveTv -> liveTvScrollToTopRequests.tryEmit(Unit)
+            AppScreenTab.Music -> Unit
             AppScreenTab.Settings -> settingsRootActionRequests.tryEmit(Unit)
         }
     }
@@ -1499,13 +1500,14 @@ internal fun MainAppContent(
         }
 
         fun canPlayContinueWatching(item: ContinueWatchingItem): Boolean =
-            item.isCloudLibraryContinueWatchingItem() || playbackAvailability.canPlay(
-                type = item.parentMetaType,
-                videoId = item.videoId,
-                parentMetaId = item.parentMetaId,
-                seasonNumber = item.seasonNumber,
-                episodeNumber = item.episodeNumber,
-            )
+            item.parentMetaType.equals("youtube", ignoreCase = true) ||
+                item.isCloudLibraryContinueWatchingItem() || playbackAvailability.canPlay(
+                    type = item.parentMetaType,
+                    videoId = item.videoId,
+                    parentMetaId = item.parentMetaId,
+                    seasonNumber = item.seasonNumber,
+                    episodeNumber = item.episodeNumber,
+                )
 
         fun canSelectContinueWatchingStreams(item: ContinueWatchingItem): Boolean =
             !item.isCloudLibraryContinueWatchingItem() &&
@@ -1513,7 +1515,34 @@ internal fun MainAppContent(
 
         val openContinueWatching: (ContinueWatchingItem, Boolean, Boolean) -> Unit = { item, manualSelection, startFromBeginning ->
             resumePromptItem = null
-            if (item.isCloudLibraryContinueWatchingItem()) {
+            if (item.parentMetaType.equals("youtube", ignoreCase = true)) {
+                // YouTube URLs expire: resolve the stored video id again through the YouTube engine.
+                val videoId = item.videoId.substringAfter("youtube:", item.videoId)
+                val resumeMs = if (startFromBeginning) 0L else item.resumePositionMs
+                val resolve = com.nuvio.app.features.youtube.YouTubeHost.resolveVideo
+                if (resolve == null) {
+                    NuvioToastController.show("YouTube isn't available on this device.")
+                } else {
+                    coroutineScope.launch {
+                        resolve(videoId, item.title, item.poster ?: item.imageUrl, resumeMs).fold(
+                            onSuccess = { video ->
+                                com.nuvio.app.features.youtube.YouTubeHost.openVideo?.invoke(
+                                    com.nuvio.app.features.youtube.YouTubePlayRequest(
+                                        url = video.url,
+                                        title = video.title,
+                                        poster = video.poster,
+                                        videoId = video.videoId,
+                                        startPositionMs = video.startPositionMs,
+                                    ),
+                                )
+                            },
+                            onFailure = { error ->
+                                NuvioToastController.show(error.message ?: "Couldn't play this video.")
+                            },
+                        )
+                    }
+                }
+            } else if (item.isCloudLibraryContinueWatchingItem()) {
                 coroutineScope.launch {
                     when (
                         val lookup = CloudLibraryRepository.findPlaybackTargetForProgressResult(

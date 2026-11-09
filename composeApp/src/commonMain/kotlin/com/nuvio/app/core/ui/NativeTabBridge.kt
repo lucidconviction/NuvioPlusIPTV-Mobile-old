@@ -26,6 +26,7 @@ internal enum class NativeNavigationTab {
     Library,
     YouTube,
     LiveTv,
+    Music,
     Settings,
     ;
 

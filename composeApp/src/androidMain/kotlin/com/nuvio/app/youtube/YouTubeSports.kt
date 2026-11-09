@@ -3,6 +3,7 @@ package com.nuvio.app.youtube
 import android.content.Context
 import com.nuvio.app.features.youtube.YouTubeHost
 import com.nuvio.app.features.youtube.YouTubePlayRequest
+import com.nuvio.app.features.youtube.YouTubeResolvedVideo
 import com.nuvio.app.features.youtube.YouTubeVideoCard
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -59,8 +60,26 @@ internal object YouTubeSports {
         }.filter { it.videoId.isNotBlank() }
     }
 
-    suspend fun play(video: YouTubeVideoCard, queue: List<YouTubeVideoCard>): Result<Unit> {
+    /** Resolves a video for Home's Continue Watching or the Music page. */
+    suspend fun resolve(
+        videoId: String,
+        title: String,
+        poster: String?,
+        startPositionMs: Long,
+    ): Result<YouTubeResolvedVideo> {
         val vm = model ?: return Result.failure(IllegalStateException("YouTube isn't ready yet."))
+        return vm.resolveVideo(videoId, title, poster).map { playable ->
+            YouTubeResolvedVideo(
+                url = playable.url,
+                title = playable.title,
+                poster = playable.poster,
+                videoId = playable.videoId,
+                startPositionMs = startPositionMs,
+            )
+        }
+    }
+
+    suspend fun play(video: YouTubeVideoCard, queue: List<YouTubeVideoCard>): Result<Unit> {        val vm = model ?: return Result.failure(IllegalStateException("YouTube isn't ready yet."))
         val item = found[video.videoId]
             ?: return Result.failure(IllegalStateException("That video is no longer available."))
         val from = queue.mapNotNull { found[it.videoId] }.ifEmpty { listOf(item) }

@@ -59,6 +59,9 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
         com.nuvio.app.features.youtube.YouTubeHost.playVideo = { video, queue ->
             com.nuvio.app.youtube.YouTubeSports.play(video, queue)
         }
+        com.nuvio.app.features.youtube.YouTubeHost.resolveVideo = { videoId, title, poster, startPositionMs ->
+            com.nuvio.app.youtube.YouTubeSports.resolve(videoId, title, poster, startPositionMs)
+        }
     }
 
     override fun newImageLoader(context: android.content.Context): ImageLoader {

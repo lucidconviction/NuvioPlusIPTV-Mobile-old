@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -43,6 +44,7 @@ import dev.chrisbanes.haze.rememberHazeState
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.compose_nav_home
 import nuvio.composeapp.generated.resources.compose_nav_library
+import nuvio.composeapp.generated.resources.compose_nav_music
 import nuvio.composeapp.generated.resources.compose_nav_profile
 import nuvio.composeapp.generated.resources.compose_nav_search
 import nuvio.composeapp.generated.resources.livetv_title
@@ -117,6 +119,12 @@ internal fun MainTabsDestination(
                 icon = Icons.Filled.LiveTv,
                 label = liveTvLabel,
             ) else null,
+            if (com.nuvio.app.features.youtube.YouTubeHost.available) FloatingNavigationItem(
+                selected = selectedTab == AppScreenTab.Music,
+                onClick = { onTabSelected(AppScreenTab.Music) },
+                icon = Icons.Filled.MusicNote,
+                label = stringResource(Res.string.compose_nav_music),
+            ) else null,
             FloatingNavigationItem(
                 selected = selectedTab == AppScreenTab.Settings,
                 onClick = { onTabSelected(AppScreenTab.Settings) },
@@ -175,6 +183,14 @@ internal fun MainTabsDestination(
                                 onClick = { onTabSelected(AppScreenTab.LiveTv) },
                                 icon = Icons.Filled.LiveTv,
                                 contentDescription = liveTvLabel,
+                            )
+                        }
+                        if (com.nuvio.app.features.youtube.YouTubeHost.available) {
+                            NavItem(
+                                selected = selectedTab == AppScreenTab.Music,
+                                onClick = { onTabSelected(AppScreenTab.Music) },
+                                icon = Icons.Filled.MusicNote,
+                                contentDescription = stringResource(Res.string.compose_nav_music),
                             )
                         }
                         NavItem(

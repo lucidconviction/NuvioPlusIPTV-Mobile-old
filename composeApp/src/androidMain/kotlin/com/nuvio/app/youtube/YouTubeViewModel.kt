@@ -604,6 +604,11 @@ class YouTubeViewModel (private val context: Context, autoSelect: Boolean = true
     /** Looks up the stream details for [video]; slow (several requests), so call off the main thread. */
     private fun resolveBlocking(video: YtItem): YtPlayable {
         val videoId = video.videoId ?: error("Not a video")
+        return resolveBlocking(videoId, video.title, video.thumbnail)
+    }
+
+    /** Looks up a video by id, for callers that only have its id/title/poster. */
+    private fun resolveBlocking(videoId: String, title: String, poster: String?): YtPlayable {
         val startedAt = android.os.SystemClock.elapsedRealtime()
         fun since() = android.os.SystemClock.elapsedRealtime() - startedAt
         var info = service.mediaItemService.getFormatInfoObserve(videoId).blockingFirst()
@@ -640,7 +645,7 @@ class YouTubeViewModel (private val context: Context, autoSelect: Boolean = true
         // the same user-agent.
         val headers = info.clientInfo?.userAgent?.takeIf { it.isNotBlank() }
             ?.let { mapOf("User-Agent" to it) }.orEmpty()
-        return YtPlayable(url, video.title, video.thumbnail, videoId, headers)
+        return YtPlayable(url, title, poster, videoId, headers)
     }
 
     /** One lookup per video at a time: hovering a card and then pressing OK share the same request. */
@@ -665,6 +670,23 @@ class YouTubeViewModel (private val context: Context, autoSelect: Boolean = true
         if (item.kind != YtKind.VIDEO || item.isLive || item.videoId == null) return null
         return lookup(item).await().getOrNull()
     }
+
+    /**
+     * Resolves a video by id for callers outside the feed (Home's Continue Watching, the Music
+     * page). Uses the same lookup path and cache as the YouTube tab.
+     */
+    suspend fun resolveVideo(videoId: String, title: String, poster: String?): Result<YtPlayable> =
+        withContext(Dispatchers.IO) {
+            val id = videoId.trim()
+            if (id.isEmpty()) return@withContext Result.failure(IllegalStateException("No video id"))
+            resolved[id]?.takeIf { it.isFresh }?.let { return@withContext Result.success(it) }
+            runCatching { resolveBlocking(id, title, poster) }.also { result ->
+                result.getOrNull()?.let {
+                    if (resolved.size >= MAX_CACHED) resolved.clear()
+                    resolved[id] = it
+                }
+            }
+        }
 
     /**
      * Starts looking up [item]'s stream while its card is highlighted, so pressing OK is instant.
