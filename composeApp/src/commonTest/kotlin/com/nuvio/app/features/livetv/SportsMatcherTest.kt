@@ -39,6 +39,18 @@ class SportsMatcherTest {
     private fun team(id: String, name: String, location: String, abbr: String) =
         TeamInfo("football/nfl", id, name, "$location $name", abbr, location, null, null, null)
 
+    @Test
+    fun soundLayoutsDoNotSplitBackupCopies() {
+        assertEquals(
+            com.nuvio.app.features.livetv.player.LiveTvPlayback.backupName("ESPN HD"),
+            com.nuvio.app.features.livetv.player.LiveTvPlayback.backupName("ESPN 5.1 HD"),
+        )
+        assertEquals(
+            SportsMatcher.copyKey(channel("a", "ESPN HD")),
+            SportsMatcher.copyKey(channel("b", "ESPN 7.1 HD")),
+        )
+    }
+
     private val lions = team("8", "Lions", "Detroit", "DET")
     private val bears = team("3", "Bears", "Chicago", "CHI")
     private val packers = team("9", "Packers", "Green Bay", "GB")

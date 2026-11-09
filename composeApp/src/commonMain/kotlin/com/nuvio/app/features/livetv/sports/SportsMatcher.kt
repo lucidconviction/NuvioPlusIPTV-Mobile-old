@@ -942,9 +942,12 @@ internal class SportsMatcher(private val db: GuideSearch = GuideSearch.Store) {
             "hevc", "h265", "h264", "50fps", "60fps", "fps", "backup", "alt"
         )
 
+        /** "5.1", "7.1", "2.0" written in a channel's name: punctuation is stripped later, so remove it first. */
+        private val COPY_AUDIO = Regex("""\b[257]\.[01]\b""")
+
         /** The same channel's copies (ESPN FHD, ESPN HD, ESPN SD) share this; other regions' don't. */
         fun copyKey(ch: LiveChannel): String =
-            norm(ch.name.replace("+", " plus ")).split(' ').filter { it.isNotEmpty() && it !in COPY_WORDS }.joinToString(" ")
+            norm(ch.name.replace("+", " plus ").replace(COPY_AUDIO, " ")).split(' ').filter { it.isNotEmpty() && it !in COPY_WORDS }.joinToString(" ")
 
         /**
          * [list] (in order) with each channel's copies together: one entry per channel, the first
