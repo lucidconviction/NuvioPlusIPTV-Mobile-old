@@ -88,6 +88,8 @@ data class YtPlayable(
     val poster: String?,
     val videoId: String,
     val headers: Map<String, String> = emptyMap(),
+    /** A direct audio-only stream when YouTube provides one. */
+    val audioUrl: String? = null,
     /** Where to start, in milliseconds. */
     val startPositionMs: Long = 0L,
     /** When this was looked up. YouTube's stream links stop working after a few hours. */
@@ -645,7 +647,20 @@ class YouTubeViewModel (private val context: Context, autoSelect: Boolean = true
         // the same user-agent.
         val headers = info.clientInfo?.userAgent?.takeIf { it.isNotBlank() }
             ?.let { mapOf("User-Agent" to it) }.orEmpty()
-        return YtPlayable(url, title, poster, videoId, headers)
+        // A direct audio stream lets downloads avoid the local DASH manifest. Prefer the highest
+        // bitrate audio format YouTube returned.
+        val audioUrl = info.adaptiveFormats
+            ?.filter { (it.mimeType ?: "").startsWith("audio/") && !it.url.isNullOrBlank() }
+            ?.maxByOrNull { it.bitrate }
+            ?.url
+        return YtPlayable(
+            url = url,
+            title = title,
+            poster = poster,
+            videoId = videoId,
+            headers = headers,
+            audioUrl = audioUrl,
+        )
     }
 
     /** One lookup per video at a time: hovering a card and then pressing OK share the same request. */

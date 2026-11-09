@@ -28,6 +28,10 @@ data class YouTubeResolvedVideo(
     val poster: String?,
     val videoId: String,
     val startPositionMs: Long = 0L,
+    /** A direct audio-only stream when YouTube provides one; useful for downloads/audio mode. */
+    val audioUrl: String? = null,
+    /** Headers the stream URL was issued for (mainly the client's User-Agent). */
+    val headers: Map<String, String> = emptyMap(),
 )
 
 /**

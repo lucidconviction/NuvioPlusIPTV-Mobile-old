@@ -75,6 +75,8 @@ internal object YouTubeSports {
                 poster = playable.poster,
                 videoId = playable.videoId,
                 startPositionMs = startPositionMs,
+                audioUrl = playable.audioUrl,
+                headers = playable.headers,
             )
         }
     }

@@ -146,6 +146,7 @@ open class MainActivity : AppCompatActivity() {
         CollectionMobileSettingsStorage.initialize(applicationContext)
         CollectionStorage.initialize(applicationContext)
         DownloadsStorage.initialize(applicationContext)
+        com.nuvio.app.features.music.MusicPlatform.initialize(applicationContext)
         DownloadsPlatformDownloader.initialize(applicationContext)
         DownloadsLiveStatusPlatform.initialize(applicationContext)
         AndroidAppUpdaterPlatform.initialize(applicationContext)

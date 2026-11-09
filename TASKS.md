@@ -10,6 +10,7 @@ constraints, acceptance criteria, and verification commands.
 |----|--------|----------|------|
 | TASK-2026-11-07-SPORTS-REPLAYS | done | P2 | Sports Replays section on the Sports page (YouTube-only) |
 | TASK-2026-11-09-MUSIC | done | P1 | Music page, YouTube music videos, audio/video toggles, Music nav tab |
+| TASK-2026-11-09-CROSSFADE | done | P2 | Crossfade audio/video when moving to the next item |
 
 ---
 
@@ -305,8 +306,10 @@ Manual checks (emulator or device):
 
 ## TASK-2026-11-09-MUSIC — Music page with YouTube videos and audio/video modes
 
-- **Status:** done — Music tab added before Settings, YouTube search rows, centred video/audio player
-  with shared Video/Audio toggles.
+- **Status:** done — Music tab added before Settings, Deezer-backed catalogue (public keyless API),
+  YouTube playback, centred video/audio player with shared Video/Audio toggles, artist/album/playlist
+  pages, search, library favourites and playlists, LRCLIB lyrics, audio downloads, queue and
+  shuffle/repeat.
 - **Created:** 2026-11-09
 - **Project:** `/Users/robbdeeze/Documents/projects/NuvioPlusIPTV-Mobile-old-main`
 - **Reference app:** https://github.com/lucidconviction/PlayTorrioV3.git (`lib/pages/music/music_page.dart`)
@@ -362,4 +365,62 @@ picture-in-picture-style window, never the full-screen player and never an exter
 - Video mode plays a YouTube music video in the centred window.
 - Audio mode keeps playing with the cover shown; toggling either place updates the other.
 - Rotating the device does not change orientation when a video is playing.
+- `:composeApp:compileAndroidMain` and `:androidApp:assembleFullDebug` pass.
+
+---
+
+## TASK-2026-11-09-CROSSFADE — Fade out the current video/audio and overlap the next item
+
+- **Status:** done — implemented 2026-11-09 for the Music player. The full-screen player's in-app
+  next-video flow keeps its existing single-surface switch.
+- **Created:** 2026-11-09
+- **Area:** Music player queue transitions; video-to-video transitions where the next item is already prepared.
+- **Depends on:** `MusicPlayerRepository` queue/advance and the existing `PlatformPlayerSurface`.
+
+### Implementation (2026-11-09)
+
+- `MusicScreen.kt` keeps two `PlatformPlayerSurface`s alive through `AnimatedContent`: the outgoing
+  track keeps playing at its own volume while the incoming track resolves.
+- Audio crossfades over 1.2 s with `PlayerEngineController.setVolume` (both surfaces are created
+  with `allowConcurrentAudio = true` for the overlap); pause during a transition stops the outgoing
+  player immediately.
+- The music video picture fades to black, swaps surfaces, then fades back in from black once the new
+  player is ready. Media3's `PlayerView` uses a SurfaceView, which ignores Compose alpha, so the
+  picture uses the documented single-surface fallback instead of an alpha blend. The next surface is
+  held back until the cover is fully black to avoid z-order flicker.
+- Repeat-one restarts with a short volume fade; Next/Previous and automatic advance use the same
+  crossfade. A 4 s guard reveals the error state if the next song cannot resolve.
+- Audio downloads now use the YouTube client's headers and a byte-range request, and are preferred
+  over streaming when a track is already downloaded (including offline queue playback).
+
+### Goal
+
+When the current song or video ends (or Next is pressed), fade the current video picture and audio
+out while the next item fades in, so the two overlap instead of cutting or leaving silence.
+
+### Requirements
+
+- **Audio:** start/prepare the next item, then ramp the old player's volume to 0 and the new
+  player's volume up over a short crossfade (for example 1.5–3 seconds). No audible gap or click.
+- **Video:** fade the old picture out while the next picture fades in. When both surfaces are
+  Android interop views, avoid z-order flicker; the outgoing surface must not paint over the
+  incoming one during the overlap.
+- **Music player:** apply this to automatic track end, Next/Previous and repeated tracks. Repeat-one
+  should restart smoothly rather than hard-cut.
+- **Video player:** apply the same fade to the in-app next-video flow where a following item is
+  known; keep the normal full-screen player controls usable throughout.
+- **Interruptions:** pressing pause/close or losing audio focus during a transition cancels the
+  fades cleanly and stops the outgoing player.
+- **Single-player mode:** if a second concurrent player is not allowed, use a short volume fade-out
+  + prepare gap + fade-in fallback and keep the transition under ~2 seconds.
+- **Settings:** no new mandatory setting; a short crossfade can be on by default. Respect the
+  device's reduced-motion setting for the visual fade if one is exposed.
+
+### Verification
+
+- Automatic next and manual Next overlap audio without silence; old audio is silent when the fade
+  finishes.
+- Video does not flash, jump z-order, or show the old frame over the new one.
+- Repeatedly skipping tracks does not leak players or leave one playing at low volume.
+- Pause/close/back during a transition stops both sides.
 - `:composeApp:compileAndroidMain` and `:androidApp:assembleFullDebug` pass.
