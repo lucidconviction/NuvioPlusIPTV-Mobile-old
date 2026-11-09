@@ -9,7 +9,7 @@ A Live TV guide, a Sports hub that finds every game on your own channels, catch-
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=for-the-badge)](LICENSE)
 [![Based on Nuvio Mobile](https://img.shields.io/badge/based%20on-NuvioMedia%2FNuvioMobile-8A2BE2?style=for-the-badge)](https://github.com/NuvioMedia/NuvioMobile)
 
-[Music](#-music-hub) · [Sports replays](#-sports-replays) · [Player](#-player-and-live-tv-improvements) · [Features](#-everything-from-nuvio--iptv) · [Build](#-build-from-source) · [Credits](#-credits)
+[Music](#-music-hub) · [Sports replays](#-sports-replays) · [Player](#-player-and-live-tv-improvements) · [Features](#-everything-from-nuvio--iptv) · [Build](#-build-from-source) · [Support](#-support-this-fork) · [Credits](#-credits)
 
 </div>
 
@@ -119,6 +119,16 @@ adb install -r androidApp/build/outputs/apk/full/debug/androidApp-full-debug.apk
 ```
 
 Requires **Android 7.0 or newer**. The app installs alongside the official Nuvio app and other Nuvio-based clients.
+
+---
+
+## ☕ Support this fork
+
+If you like the app, feel free to buy me some tea — it's completely optional and very appreciated.
+
+[![Buy me some tea](https://img.shields.io/badge/Buy%20me%20some%20tea-PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white)](https://www.paypal.me/Robbdeeze)
+
+**[paypal.me/Robbdeeze](https://www.paypal.me/Robbdeeze)**
 
 ---
 
