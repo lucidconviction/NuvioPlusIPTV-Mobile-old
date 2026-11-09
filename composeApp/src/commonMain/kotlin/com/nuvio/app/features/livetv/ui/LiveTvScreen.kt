@@ -71,6 +71,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.MenuBook
@@ -261,6 +262,7 @@ fun LiveTvScreen(
     // Groups start collapsed; tapping a header opens it. Kept across the trip to the player.
     val expanded = remember { mutableStateOf(LiveTvListMemory.expanded) }
     var sheetChannel by remember { mutableStateOf<LiveChannel?>(null) }
+    var pickFavoritesFor by remember { mutableStateOf<CombinedSection?>(null) }
     var unlockGroup by remember { mutableStateOf<ChannelGroup?>(null) }
     var overflow by remember { mutableStateOf(false) }
     var streamValidation by remember { mutableStateOf(false) }
@@ -488,7 +490,8 @@ fun LiveTvScreen(
                     } else {
                         val section = combinedSection
                         item(key = "g:${section.group.id}") {
-                            GroupCard(section.group, section.channels, section.group.id !in expanded.value, playlistTag = if (playlistId == null && playlistChoices.size > 1) playlistNames[section.group.sourceId] else null) {
+                            GroupCard(section.group, section.channels, section.group.id !in expanded.value, playlistTag = if (playlistId == null && playlistChoices.size > 1) playlistNames[section.group.sourceId] else null,
+                                onPickFavorites = if (section.group.id != ChannelGroup.FAVORITES && section.group.id != ChannelGroup.RECENT && section.channels.isNotEmpty()) ({ pickFavoritesFor = section }) else null) {
                                 if (section.group.locked) unlockGroup = section.group
                                 else {
                                     expanded.value = if (section.group.id !in expanded.value) expanded.value + section.group.id else expanded.value - section.group.id
@@ -537,6 +540,10 @@ fun LiveTvScreen(
                 }
             }
         }
+    }
+
+    pickFavoritesFor?.let { sec ->
+        PickFavoritesSheet(sec.group.title, sec.channels, state.favoriteKeys, onDismiss = { pickFavoritesFor = null })
     }
 
     sheetChannel?.let { channel ->
@@ -1497,6 +1504,8 @@ private fun GroupCard(
     channels: List<LiveChannel>,
     collapsed: Boolean,
     playlistTag: String? = null,
+    /** A small star that opens Pick favorites for this group (null: none). */
+    onPickFavorites: (() -> Unit)? = null,
     onToggle: () -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio
@@ -1557,6 +1566,14 @@ private fun GroupCard(
                     )
                 }
             }
+        }
+        if (!group.locked && onPickFavorites != null) {
+            Icon(
+                imageVector = Icons.Filled.StarBorder,
+                contentDescription = "Pick favorites",
+                tint = tokens.colors.textMuted,
+                modifier = Modifier.size(36.dp).clip(CircleShape).clickable(onClick = onPickFavorites).padding(6.dp),
+            )
         }
         if (!group.locked) {
             Icon(

@@ -61,6 +61,8 @@ import com.nuvio.app.features.home.components.HomeCatalogRowSection
 import com.nuvio.app.features.home.components.HomeEmptyStateCard
 import com.nuvio.app.features.home.components.homeSectionHorizontalPaddingForWidth
 import com.nuvio.app.features.home.components.HomeSkeletonRow
+import com.nuvio.app.features.livetv.ui.LiveTvSearchRow
+import com.nuvio.app.features.livetv.ui.OnDemandSearchRows
 import com.nuvio.app.features.home.components.posterGridColumnCountForWidth
 import com.nuvio.app.features.watched.WatchedRepository
 import kotlinx.coroutines.delay
@@ -331,6 +333,14 @@ fun SearchScreen(
             } else {
                 val normalizedQuery = query.trim()
                 val isWaitingForSearch = normalizedQuery.isNotBlank() && lastRequestedQuery != normalizedQuery
+                if (normalizedQuery.length >= 2) {
+                    item(key = "livetv_search") {
+                        LiveTvSearchRow(normalizedQuery, Modifier.padding(horizontal = homeSectionPadding))
+                    }
+                    item(key = "ondemand_search") {
+                        OnDemandSearchRows(normalizedQuery, Modifier.padding(horizontal = homeSectionPadding))
+                    }
+                }
                 when {
                     isWaitingForSearch -> {
                         items(2) {

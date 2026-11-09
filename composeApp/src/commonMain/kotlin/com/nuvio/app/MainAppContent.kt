@@ -959,6 +959,7 @@ internal fun MainAppContent(
             onOpenDetails = { type, tmdbId, title -> navController.navigate(DetailRoute(type = type, id = "tmdb:$tmdbId", title = title)) },
             onSeeAll = { kind, categoryUid, title -> navController.navigate(LiveTvOnDemandSeeAllRoute(kind = kind.key, categoryUid = categoryUid, title = title)) },
         )
+        SideEffect { com.nuvio.app.features.livetv.ui.OnDemandSearchBridge.actions = onDemandActions }
 
         fun openRecording(rec: LiveTvRecording) {
             val playerLaunch = PlayerLaunch(
