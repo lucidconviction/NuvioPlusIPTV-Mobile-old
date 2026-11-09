@@ -3,7 +3,6 @@ package com.nuvio.app.features.player
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.content.pm.ActivityInfo
 import android.media.AudioManager
 import androidx.activity.ComponentActivity
 import android.os.Build
@@ -31,17 +30,8 @@ import kotlin.math.roundToInt
 
 @Composable
 actual fun LockPlayerToLandscape() {
-    val activity = LocalContext.current.findActivity() ?: return
-    if (!activity.shouldForceLandscapePlayer()) return
-
-    DisposableEffect(activity) {
-        val previousOrientation = activity.requestedOrientation
-        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-
-        onDispose {
-            activity.requestedOrientation = previousOrientation
-        }
-    }
+    // The player follows whatever orientation the device is already in; rotating is left to the
+    // user and system rotation setting.
 }
 
 @Composable
@@ -149,12 +139,6 @@ private tailrec fun Context.findActivity(): Activity? =
         is ContextWrapper -> baseContext.findActivity()
         else -> null
     }
-
-private fun Activity.shouldForceLandscapePlayer(): Boolean {
-    if (resources.configuration.smallestScreenWidthDp >= 600) return false
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInMultiWindowMode) return false
-    return true
-}
 
 private class AndroidPlayerGestureController(
     private val activity: Activity,

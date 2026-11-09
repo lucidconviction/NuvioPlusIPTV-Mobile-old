@@ -9,38 +9,15 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import platform.AVFAudio.AVAudioSession
 import platform.AVFAudio.outputVolume
-import platform.Foundation.NSNotificationCenter
 import platform.MediaPlayer.MPVolumeView
 import platform.UIKit.UIApplication
 import platform.UIKit.UIControlEventValueChanged
 import platform.UIKit.UIScreen
 import platform.UIKit.UISlider
 
-private const val lockPlayerToLandscapeNotification = "NuvioPlayerLockLandscape"
-private const val unlockPlayerOrientationNotification = "NuvioPlayerUnlockOrientation"
-private var playerLandscapeLockCount = 0
-
 @Composable
 actual fun LockPlayerToLandscape() {
-    DisposableEffect(Unit) {
-        playerLandscapeLockCount += 1
-        if (playerLandscapeLockCount == 1) {
-            NSNotificationCenter.defaultCenter.postNotificationName(
-                lockPlayerToLandscapeNotification,
-                null,
-            )
-        }
-
-        onDispose {
-            playerLandscapeLockCount -= 1
-            if (playerLandscapeLockCount == 0) {
-                NSNotificationCenter.defaultCenter.postNotificationName(
-                    unlockPlayerOrientationNotification,
-                    null,
-                )
-            }
-        }
-    }
+    // The player follows the device's current orientation; no rotation lock.
 }
 
 @Composable
