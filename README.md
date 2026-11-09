@@ -2,195 +2,138 @@
 
 # Nuvio + IPTV Mobile
 
-**Everything in Nuvio Mobile, plus everything IPTV: a Live TV guide, a Sports hub that finds every game on your own channels, catch-up, recordings, and your provider's movies and series, all in one app for Android phones and tablets. Your Live TV setup follows your Nuvio account, so it's the same on your phone and on your TV.**
+**A community fork of Nuvio + IPTV Mobile, with a full music hub, YouTube sports replays, and a smoother everyday player.**
 
-[![Latest release](https://img.shields.io/github/v/release/homelessbrian/NuvioPlusIPTV-Mobile?include_prereleases&label=latest&style=for-the-badge)](https://github.com/homelessbrian/NuvioPlusIPTV-Mobile/releases)
-[![Downloads](https://img.shields.io/github/downloads/homelessbrian/NuvioPlusIPTV-Mobile/total?style=for-the-badge)](https://github.com/homelessbrian/NuvioPlusIPTV-Mobile/releases)
+A Live TV guide, a Sports hub that finds every game on your own channels, catch-up, recordings, your provider's movies and series, and now a complete music experience — in one app for Android phones and tablets.
+
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=for-the-badge)](LICENSE)
 [![Based on Nuvio Mobile](https://img.shields.io/badge/based%20on-NuvioMedia%2FNuvioMobile-8A2BE2?style=for-the-badge)](https://github.com/NuvioMedia/NuvioMobile)
-[![Support on Ko-fi](https://img.shields.io/badge/support-Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/homelessbrian)
 
-[Sports hub](#-sports-hub) · [Download](#-installation) · [Features](#-features) · [Setup](#-getting-started) · [Report a bug](#-reporting-bugs-and-requesting-features) · [Support](#-support-the-project) · [TV app](https://github.com/homelessbrian/NuvioPlusIPTV)
+[Music](#-music-hub) · [Sports replays](#-sports-replays) · [Player](#-player-and-live-tv-improvements) · [Features](#-everything-from-nuvio--iptv) · [Build](#-build-from-source) · [Credits](#-credits)
 
 </div>
 
 ---
 
-## 📱 One setup, every screen
+## ✨ What this fork adds
 
-- **Nuvio Account Sync:** sign in to Nuvio and your playlists, guides, favorites and settings come back by themselves, on your phone, tablet and TV. Change something on one and it shows up on the others.
-- **Works with the TV app:** [Nuvio + IPTV](https://github.com/homelessbrian/NuvioPlusIPTV) for Google TV, Android TV and Fire TV uses the same setup. Set it up once, on whichever screen is easier.
-- **Encrypted:** your saved setup (which includes your IPTV logins) is encrypted before it's stored.
-- **Phone-only choices stay on the phone:** things like Channel Display are just for this device, so your TV looks the way you left it.
+This fork keeps everything from Nuvio + IPTV Mobile and adds:
 
----
-
-## 🏆 Sports hub
-
-Sports shows scores and schedules, and works out **which of your own channels are showing each game**.
-
-- **My Sports:** Live & Upcoming first, then a row for every team, league and name you follow, in your teams' colours.
-- **All Events:** every game in your region's leagues plus everything you follow, with **day tabs** from a week back to a week ahead.
-- **Follow anything:** teams, countries, whole leagues, or a **name** (a player, driver or fighter). One search finds teams and leagues alike.
-- **200+ leagues:** NFL, NBA, NHL, MLB, MLS, college sports, the Premier League and the rest of UK and European football, rugby, cricket, F1, NASCAR, IndyCar, golf, tennis, UFC and more. Your own TV guide fills the gaps.
-- **Every channel showing the game,** best match first. HD, FHD and SD copies of a channel share one row, and **Channels from** shows one region's or language's channels first.
-- **Tables:** league tables with form, place changes and playoff lines, and your team marked.
-- **Game pages:** the score by period, scoring as it happens, team stats, line-ups, leaderboards and fight cards.
-- **Never miss it:** reminders, **scoring alerts** when your team scores, and **Record a game** with extra time for overtime.
-- **Spoiler-free:** **Hide Scores** keeps results off the screen until you're ready.
+- **A complete Music hub** — browse, search, build a library, follow artists, make playlists, read synced lyrics, download songs for offline listening, and watch music videos or listen in audio-only mode.
+- **YouTube sports replays** — a Replays tab on Sports, plus pre-event and post-event videos on every game page.
+- **A smoother player** — the player follows the device's current orientation, stream validation and resilient playlist updates, a draggable in-app PiP, and multi-view.
+- **Crossfading music transitions** — audio overlaps between tracks and the picture transitions cleanly instead of cutting.
+- **YouTube in Continue Watching** — a YouTube video you were watching on Home reopens and plays through the app's YouTube engine.
 
 ---
 
-## ✨ Features
+## 🎵 Music hub
 
-### 📺 Live TV, made for touch
-- **Group cards:** each group shows its first channel logos and how many channels it has. Tap to open it, and its name stays pinned at the top while you scroll.
-- **Guide:** channels down the side and a timeline across, with what's on now highlighted, a progress bar and a "now" line (which you can hide).
-- **Playlist menu:** with more than one playlist, pick one in the group view, the guide and On Demand.
-- **Channel Display:** show logos, names, numbers, or any mix. Logos only fills each tile with the logo.
-- **Favorites** and **Recently watched**, plus a star on the logo of your favorite channels.
+Open **Music** from the navigation bar, just before Settings.
 
-### 🎬 While watching
-- **Channel panel:** a Channels button in the player opens your groups and a mini guide beside the video (below it when your phone is upright, along the bottom on a tablet). Switch channels without leaving the player.
-- **Swipe to change channel:** swipe up or down in the middle of the picture.
-- **Catch-up:** watch past shows with a seek bar, or restart what's on now.
-- **Reminders** for upcoming shows, with a notification.
+### Browse and discover
+- **Home** with a featured track, trending songs, new releases, artists, playlists and genres.
+- **Search** songs, artists, albums and playlists from one box, with filters for each type.
+- **Artist pages** with top songs, albums and related artists.
+- **Album pages** with artwork, release date, track list and play/save actions.
+- **Playlist pages** with the full track list and one-tap playback.
+- **Genre browsing** for charts and mood-based discovery.
 
-### 📡 Your sources, your way
-- **Multiple M3U playlists** and **multiple XMLTV guides,** merged into one guide.
-- **Xtream logins,** with your provider's movies and series too if you want them.
-- **Smart guide matching** (fine-tune any channel with **Assign EPG**), plus guide and catch-up time shifts for providers that are off by an hour or more.
+### Your library
+- **Like songs** and save artists and albums.
+- **Create local playlists**, add songs from anywhere, and keep them on the device.
+- **Queue** view with jump-to-track and remove.
+- **Shuffle** and **repeat off / all / one**.
+- **Downloads** for offline listening, with a Downloads tab and per-song removal.
 
-### ⏺️ Recordings
-- **Record a show** from the guide or a game from Sports, and watch it later in **Recordings**.
-
-### 🗂️ Channel management
-- **Hide, reorder and rename** channels and groups.
-- **New groups** you add to a playlist show up next to their neighbours, and hiding a playlist group never empties your own groups.
-
-### 🎞️ On Demand
-- **Movies and series from your Xtream provider,** with categories, search and sorting.
-- **📡 On Demand in the source list:** your provider's copy shows up next to your addons' sources on a title's page, best quality first, with quality tags.
-
-### 🔒 Parental controls
-- **PIN locks** for any group or category. Adult content locks automatically.
-
-### 🔎 Part of Nuvio, not bolted on
-- Everything you get in Nuvio Mobile is still here: your addons, library, Continue Watching, Trakt, Simkl and MDBList, subtitles and the player.
-- Live TV, Sports, On Demand and Recordings sit inside the app, with their settings in Nuvio's own Settings.
+### Playback
+- **Video / Audio switch** on both the Music page and the player, sharing one state.
+- **Centred video window** with the app's own player — no full-screen route and no external app.
+- **Audio mode** shows the cover art while the song keeps playing; downloaded songs show their cover and play locally.
+- **Synced lyrics** with automatic scrolling to the current line.
+- **Crossfade** between tracks: the outgoing audio fades out while the next fades in, the picture transitions smoothly, repeat-one restarts softly, and pausing during a transition stops the outgoing side.
+- **Music videos** are resolved through the app's YouTube engine, so the same player, captions and quality controls are used everywhere.
 
 ---
 
-## 📥 Installation
+## 🏆 Sports replays
 
-1. Open the **[latest release](https://github.com/homelessbrian/NuvioPlusIPTV-Mobile/releases)**.
-2. Download the APK for your device:
+Sports already shows scores, schedules and which of your own channels are showing each game. This fork adds video:
 
-   | Device | APK |
-   |---|---|
-   | Almost every phone and tablet from the last several years | `arm64-v8a` |
-   | Older or budget phones | `armeabi-v7a` |
-   | Chromebooks and emulators | `x86_64` |
-
-   Not sure? Pick `arm64-v8a`. If it won't install, try `armeabi-v7a`.
-
-3. Open the downloaded file and tap **Install**, allowing installs from unknown sources when asked.
-
-Requires **Android 7.0 or newer**. It installs **alongside** the official Nuvio app and other Nuvio IPTV apps.
-
-**Updating:** updates appear **inside the app**.
+- **Replays tab** directly after Following, with a sport filter and YouTube rows for the sports you follow or the region you selected.
+- **Game pages** get a **Pre-event videos** row for upcoming and live games (commentary, previews, press conferences, weigh-ins) and a **Post-event videos** row for finished games (highlights, interviews, reaction).
+- Everything plays in the app's existing in-app YouTube player, with the same controls, quality options and autoplay behaviour.
 
 ---
 
-## 🚀 Getting started
+## 📺 Player and Live TV improvements
 
-1. **Sign in to Nuvio.** If you already use Nuvio + IPTV on your TV with the same account, your Live TV setup comes over by itself, and you can skip to step 4.
-2. Open **Settings → Live TV** and choose **Add M3U playlist** or **Add Xtream login**. Turn on **Import movies & series** if you want your provider's movies and series too.
-3. Optionally **Add EPG source** for an extra TV guide.
-4. Open **Live TV**, **Sports** or **On Demand**. The first load can take a minute with big providers.
-5. In **Sports**, follow your teams and leagues. Set your region, reminders and scoring alerts in Sports settings.
-
----
-
-## 🐞 Reporting bugs and requesting features
-
-Please search [existing issues](https://github.com/homelessbrian/NuvioPlusIPTV-Mobile/issues) first, then [open a new one](https://github.com/homelessbrian/NuvioPlusIPTV-Mobile/issues/new). Say which phone or tablet you use and its Android version.
-
-**If something in Sports is wrong,** say which game and which channel you expected.
-
-Problems with Nuvio's movies, shows, addons or accounts that also happen in the official app belong with [Nuvio](https://github.com/NuvioMedia/NuvioMobile/issues). Problems with the TV app go to [Nuvio + IPTV](https://github.com/homelessbrian/NuvioPlusIPTV/issues).
+- **Orientation follows the device.** The player no longer forces landscape; rotate only when you want to.
+- **Stream validation and resilient playlist updates** — bad or stale streams are handled without losing the guide, and large Xtream lists stream in reliably.
+- **In-app PiP** with a reliable press-and-hold drag, plus **Multi-view** for watching more than one stream at once.
+- **Quick Channels** in the player overlay for fast switching.
+- **Direct add-on playback** and safer add-on handling.
+- **Channel management** — hide, reorder and rename channels and groups; pick favorites; change channel logos; search rows and Xtream switches.
+- **Matching copies across sound layouts**, so the same channel is grouped sensibly when a provider lists several audio variants.
 
 ---
 
-## ❓ FAQ
+## 📦 Everything from Nuvio + IPTV
 
-<details>
-<summary><b>Does this include any channels or movies?</b></summary>
-
-No. It only plays what you add yourself: your own playlists, guides, Xtream logins, addons and debrid services.
-</details>
-
-<details>
-<summary><b>Do I need the TV app?</b></summary>
-
-No. The phone app works on its own. If you have both, sign in to the same Nuvio account and they share one Live TV setup.
-</details>
-
-<details>
-<summary><b>My TV setup didn't show up on my phone.</b></summary>
-
-Make sure both are signed in to the same Nuvio account and that **Nuvio Account Sync** is on in **Settings → Live TV** on the TV (and **Nuvio account sync** on the phone). Then open Live TV on the phone, or tap **Sync Now**.
-</details>
-
-<details>
-<summary><b>I don't see On Demand.</b></summary>
-
-Turn on **Import movies & series** for your playlist in **Settings → Live TV**. On Demand appears once the first import finishes.
-</details>
-
-<details>
-<summary><b>Sports shows the wrong channel for a game, or none at all.</b></summary>
-
-Open the game and pick the right channel. It's remembered from then on. If your team or league is missing, search for it when following: search covers every league, not just your region's.
-</details>
-
-<details>
-<summary><b>Some channels show "Programming" or the wrong listings.</b></summary>
-
-Choose **Assign EPG** in the channel's menu. If every channel is off by the same amount, use the guide time shift in **Settings → Live TV**.
-</details>
-
-<details>
-<summary><b>Where do the scores come from?</b></summary>
-
-Scores, schedules, tables, team logos and colours come from ESPN's free public feed, plus HockeyTech, MLB's stats service and TheSportsDB for leagues ESPN doesn't cover. Sports they don't cover are found in your own TV guide.
-</details>
-
-<details>
-<summary><b>What does Nuvio Account Sync store, and where?</b></summary>
-
-Your Live TV setup, encrypted, linked to your Nuvio account. Nothing is written to Nuvio's own servers. See the [privacy policy](https://homelessbrian.github.io/privacy.html).
-</details>
+- **Live TV guide** with channels down the side, a timeline across, now/next highlighting, progress and a hideable "now" line.
+- **Multiple M3U playlists** and **multiple XMLTV guides**, merged into one guide.
+- **Xtream logins**, with your provider's movies and series if you enable them.
+- **Catch-up**, reminders and **recordings**.
+- **On Demand** with categories, search, sorting and source quality tags.
+- **Parental controls** with PIN locks for groups and categories.
+- **Sports hub** with My Sports, All Events, day tabs, team and league following, tables, game pages, reminders, scoring alerts, hide scores and record-a-game.
+- **Nuvio account sign-in** so your library, profiles and Live TV setup follow you across devices.
+- **Addons, library, Continue Watching, Trakt, Simkl, MDBList, subtitles and the Nuvio player** — all still here.
 
 ---
 
-## ☕ Support the project
+## 🚀 Build from source
 
-Nuvio + IPTV is free. If it's made your phone or TV better and you'd like to say thanks, you can buy me a coffee on **[Ko-fi](https://ko-fi.com/homelessbrian)**. It's completely optional, and every bit helps keep updates coming.
+Requirements:
 
-[![Support me on Ko-fi](https://img.shields.io/badge/Buy%20me%20a%20coffee-Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/homelessbrian)
+- **JDK 17**
+- **Android SDK** with the compile SDK from `gradle/libs.versions.toml`
+- `local.properties` containing `sdk.dir=/path/to/Android/sdk`
+
+Build the full debug APK:
+
+```bash
+./gradlew :androidApp:assembleFullDebug -Pnuvio.android.distribution=full
+```
+
+The APK is written to:
+
+```text
+androidApp/build/outputs/apk/full/debug/androidApp-full-debug.apk
+```
+
+Install it on a connected device:
+
+```bash
+adb install -r androidApp/build/outputs/apk/full/debug/androidApp-full-debug.apk
+```
+
+Requires **Android 7.0 or newer**. The app installs alongside the official Nuvio app and other Nuvio-based clients.
 
 ---
 
 ## 🙏 Credits
 
-- **[Nuvio Mobile](https://github.com/NuvioMedia/NuvioMobile)** by the NuvioMedia team: this app is built on their work.
-- **[ghbarker](https://github.com/ghbarker/NuvioMobile-IPTV)**, whose port of Nuvio Mobile with IPTV this app is built on, with his permission.
-- Live TV and Sports come from **[Nuvio + IPTV](https://github.com/homelessbrian/NuvioPlusIPTV)** for TV.
-- Sports data from **ESPN**'s public feed, **[TheSportsDB](https://www.thesportsdb.com)**, **HockeyTech** and **MLB**'s stats service. Pictures and logos from **[TMDB](https://www.themoviedb.org)**. Nuvio + IPTV isn't affiliated with any of them, and team and league names and logos belong to their owners.
-- Built with Kotlin Multiplatform and Compose Multiplatform.
+This fork would not exist without the people who built the projects underneath it:
 
-Nuvio + IPTV Mobile is unofficial and is **not affiliated with or endorsed by NuvioMedia**. Please report issues here, not to the Nuvio team.
+- **[NuvioMedia / Nuvio Mobile](https://github.com/NuvioMedia/NuvioMobile)** — the upstream Nuvio client, its player, library, addons, sync and Compose Multiplatform foundation.
+- **[Nuvio + IPTV](https://github.com/homelessbrian/NuvioPlusIPTV)** and **[Nuvio + IPTV Mobile](https://github.com/homelessbrian/NuvioPlusIPTV-Mobile)** — the main Nuvio + IPTV projects, Live TV, Sports, On Demand, recordings and the IPTV setup this fork builds on.
+- **[Nuvio One](https://github.com/zoga2o3-ops/Nuvio-One)** — for the inspiration of bringing IPTV, YouTube and music together in one app.
+- **[ghbarker / NuvioMobile-IPTV](https://github.com/ghbarker/NuvioMobile-IPTV)** — the original IPTV port of Nuvio Mobile, used with permission and gratitude.
+
+Thank you to every developer, tester and contributor in those projects. This fork is unofficial and is **not affiliated with or endorsed by NuvioMedia**. Please report issues with this fork here, not to the upstream teams.
+
+Data and content sources include public sports feeds, YouTube, public music catalogue metadata, and TMDB artwork. All names, logos and trademarks belong to their owners.
 
 ## ⚖️ Legal
 
