@@ -39,6 +39,7 @@ internal data class LiveFallback(
  */
 internal object LiveTvPlayback {
     const val PROVIDER_ID = "livetv"
+    const val RECORDING_PROVIDER_ID = PROVIDER_ID + "-recording"
     const val CONTENT_TYPE = "livetv"
 
     private val lock = SynchronizedObject()
@@ -79,6 +80,11 @@ internal object LiveTvPlayback {
     /** The key of the channel last handed to the player (for the Sports hub's score on the info bar). */
     @kotlin.concurrent.Volatile
     var currentKey: String? = null
+        private set
+
+    /** The channel last switched to inside the player; the transition overlay reads its artwork. */
+    @kotlin.concurrent.Volatile
+    var lastSwitchedChannel: LiveChannel? = null
         private set
 
     /** The request for a channel, with its HLS→TS memory applied. */
@@ -123,7 +129,8 @@ internal object LiveTvPlayback {
             sourceHeaders = req.headers,
             streamType = req.streamType,
             logo = channel.logo,
-            poster = channel.logo,
+            poster = channel.thumbnail ?: channel.logo,
+            background = channel.thumbnail,
             streamTitle = channel.name,
             streamSubtitle = nowTitle ?: channel.group,
             pauseDescription = nowTitle,
@@ -155,6 +162,7 @@ internal object LiveTvPlayback {
             playing[req.url] = channel
         }
         currentKey = channel.key
+        lastSwitchedChannel = channel
         return req
     }
 
@@ -164,6 +172,16 @@ internal object LiveTvPlayback {
 
     /** Whether this provider id is Live TV's (the player asks before trying a fallback). */
     fun owns(providerAddonId: String?): Boolean = providerAddonId == PROVIDER_ID
+
+    /**
+     * Whether this provider id is any title opened from the Live TV section: a live channel or
+     * catch-up replay, a recording, or a provider's On Demand movie/episode. Those all keep the
+     * player's Channels button, even though only [owns] content is a live channel.
+     */
+    fun ownsContent(providerAddonId: String?): Boolean =
+        providerAddonId == PROVIDER_ID ||
+            providerAddonId == RECORDING_PROVIDER_ID ||
+            providerAddonId == com.nuvio.app.features.livetv.ondemand.OnDemandPlayback.PROVIDER_ID
 
     // ---------------------------------------------------------------- catch-up
 
@@ -203,7 +221,8 @@ internal object LiveTvPlayback {
             sourceHeaders = req.headers,
             streamType = req.streamType,
             logo = channel.logo,
-            poster = program.icon ?: channel.logo,
+            poster = program.icon ?: channel.thumbnail ?: channel.logo,
+            background = program.icon ?: channel.thumbnail,
             streamTitle = program.title,
             streamSubtitle = channel.name,
             pauseDescription = program.description,

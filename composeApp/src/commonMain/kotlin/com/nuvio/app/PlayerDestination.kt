@@ -31,6 +31,7 @@ internal fun PlayerDestination(
     onOpenPartyMedia: (PartyMedia) -> Unit,
     onQuickChannelsClick: (() -> Unit)? = null,
     onOpenAddonCatalog: ((manifestUrl: String, catalog: AddonCatalog) -> Unit)? = null,
+    onAddChannelToMultiView: ((com.nuvio.app.features.livetv.model.LiveChannel) -> Unit)? = null,
 ) {
     val onBack = rememberGuardedPopBackStack(navController, route)
     val launch = remember(route.launchId) { PlayerLaunchStore.get(route.launchId) }
@@ -134,6 +135,7 @@ internal fun PlayerDestination(
         onOpenPartyMedia = onOpenPartyMedia,
         onQuickChannelsClick = onQuickChannelsClick,
         onOpenAddonCatalog = onOpenAddonCatalog,
+        onAddChannelToMultiView = onAddChannelToMultiView,
         modifier = Modifier.fillMaxSize(),
     )
 }

@@ -466,6 +466,7 @@ fun LiveTvScreen(
                 item {
                     QuickChannelsInlineSection(
                         onPlayChannel = { ch -> onPlayChannel(ch, null) },
+                        onAddToMultiView = onAddChannelToMultiView,
                     )
                 }
                 // The playlist picker sits directly under Quick Channels.
@@ -583,6 +584,7 @@ fun LiveTvScreen(
 @Composable
 private fun QuickChannelsInlineSection(
     onPlayChannel: (com.nuvio.app.features.livetv.model.LiveChannel) -> Unit,
+    onAddToMultiView: (com.nuvio.app.features.livetv.model.LiveChannel) -> Unit = {},
 ) {
     val tokens = MaterialTheme.nuvio.colors
     val liveChannels by com.nuvio.app.features.livetv.data.LiveTvRepository.displayChannels.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -787,7 +789,12 @@ private fun QuickChannelsInlineSection(
                 ) {
                     items(sortedMatches, key = { it.key }) { ch ->
                         val isAlive = validation.statuses[ch.url]
-                        QuickChannelInlineRow(channel = ch, isAlive = isAlive, onClick = { onPlayChannel(ch) })
+                        QuickChannelInlineRow(
+                            channel = ch,
+                            isAlive = isAlive,
+                            onClick = { onPlayChannel(ch) },
+                            onLongClick = { onAddToMultiView(ch) },
+                        )
                     }
                 }
             }
@@ -881,11 +888,13 @@ private fun QuickChannelsInlineSection(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun QuickChannelInlineRow(
     channel: com.nuvio.app.features.livetv.model.LiveChannel,
     isAlive: Boolean?,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val tokens = MaterialTheme.nuvio.colors
     Row(
@@ -893,7 +902,7 @@ private fun QuickChannelInlineRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(NuvioTokens.Radius.md))
             .background(tokens.surfaceCard)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = NuvioTokens.Space.s10, vertical = NuvioTokens.Space.s8),
         verticalAlignment = Alignment.CenterVertically,
     ) {

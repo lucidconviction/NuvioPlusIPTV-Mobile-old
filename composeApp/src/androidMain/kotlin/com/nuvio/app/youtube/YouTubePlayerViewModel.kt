@@ -28,6 +28,11 @@ data class YtVideoInfo(
     /** The channel's profile picture. */
     val authorImage: String?,
     val subscribers: String?,
+    /** The video's full description, as YouTube returns it. */
+    val description: String?,
+    /** YouTube's own text, usually with the unit ("1.2M views"). */
+    val viewCount: String?,
+    val published: String?,
     val likeCount: String?,
     val liked: Boolean,
     val disliked: Boolean,
@@ -131,6 +136,9 @@ class YouTubePlayerViewModel (private val context: Context) : ViewModel() {
         channelId = m.channelId,
         authorImage = m.authorImageUrl?.takeIf { it.isNotBlank() },
         subscribers = m.subscriberCount,
+        description = m.description?.takeIf { it.isNotBlank() },
+        viewCount = m.viewCount?.takeIf { it.isNotBlank() },
+        published = m.publishedDate?.takeIf { it.isNotBlank() },
         likeCount = m.likeCount,
         liked = m.likeStatus == MediaItemMetadata.LIKE_STATUS_LIKE,
         disliked = m.likeStatus == MediaItemMetadata.LIKE_STATUS_DISLIKE,

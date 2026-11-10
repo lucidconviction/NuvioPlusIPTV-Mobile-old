@@ -46,5 +46,7 @@ internal data class PlayerScreenArgs(
     val onOpenPartyMedia: (PartyMedia) -> Unit = {},
     val onQuickChannelsClick: (() -> Unit)? = null,
     val onOpenAddonCatalog: ((manifestUrl: String, catalog: AddonCatalog) -> Unit)? = null,
+    /** Long-pressing a Quick Channels result in the player sends that channel to Multi-view. */
+    val onAddChannelToMultiView: ((com.nuvio.app.features.livetv.model.LiveChannel) -> Unit)? = null,
     val stream: com.nuvio.app.features.streams.StreamItem? = null,
 )

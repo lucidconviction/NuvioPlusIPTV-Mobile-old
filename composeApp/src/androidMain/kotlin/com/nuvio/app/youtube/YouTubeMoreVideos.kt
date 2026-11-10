@@ -29,14 +29,19 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Comment
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,20 +53,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import com.nuvio.app.features.youtube.YouTubePlayRequest
+import kotlinx.coroutines.flow.flowOf
 
 /**
- * The player's "More Videos" button and the list the current video was picked from.
+ * The player's YouTube side buttons: Info, More Videos and Comments.
  *
- * The button sits at the middle of the right edge. Tapping it slides a vertically scrolling
- * overlay in from the right; each entry is a thumbnail a quarter of the player's width, with the
- * title underneath. Picking one resolves and plays it in place of the current video.
+ * The buttons sit in a column at the middle of the right edge. Each opens the same right-side
+ * panel; More Videos lists the queue the current video was picked from, Info shows the video's
+ * details, and Comments shows its comments with replies one layer deeper.
  */
 @Composable
 fun YouTubeMoreVideos(
@@ -69,82 +77,150 @@ fun YouTubeMoreVideos(
     buttonVisible: Boolean,
     onPlay: (YouTubePlayRequest) -> Unit,
 ) {
-    val vm = YouTubeSession.feed ?: return
-    val queue by vm.queue.collectAsStateWithLifecycle()
-    YouTubeMoreVideosContent(
+    val context = LocalContext.current.applicationContext
+    val vm: YouTubePlayerViewModel = viewModel(key = "yt-player-$videoId") { YouTubePlayerViewModel(context) }
+    val state by vm.state.collectAsStateWithLifecycle()
+    val feed = YouTubeSession.feed
+    val emptyQueue = remember { flowOf(emptyList<YtItem>()) }
+    val queue by (feed?.queue ?: emptyQueue).collectAsStateWithLifecycle(initialValue = emptyList())
+
+    YouTubePlayerSidePanelsContent(
         videoId = videoId,
         queue = queue,
+        state = state,
         buttonVisible = buttonVisible,
         onPlay = onPlay,
         onActivate = { item, from, onReady, onError ->
-            vm.activate(
-                item = item,
-                from = from,
-                onError = onError,
-                onReady = onReady,
-            )
+            if (feed == null) {
+                onError("More Videos is only available from the YouTube tab.")
+            } else {
+                feed.activate(item = item, from = from, onError = onError, onReady = onReady)
+            }
         },
+        onLoadInfo = { vm.load(videoId) },
+        onLoadComments = { newest -> vm.loadComments(newest) },
+        onLoadMoreComments = vm::loadMoreComments,
+        onLoadReplies = vm::loadReplies,
+        onLoadMoreReplies = vm::loadMoreReplies,
+        onClearReplies = vm::clearReplies,
+        onClearMessage = vm::clearMessage,
     )
 }
 
-/** The button and panel, independent of the feed's view model so it can be tested on its own. */
+internal enum class SidePanelMode { INFO, MORE, COMMENTS, REPLIES }
+
+/** The buttons and panels, independent of the view models so they can be tested on their own. */
 @Composable
-internal fun YouTubeMoreVideosContent(
+internal fun YouTubePlayerSidePanelsContent(
     videoId: String,
     queue: List<YtItem>,
+    state: YtPlayerState,
     buttonVisible: Boolean,
     onPlay: (YouTubePlayRequest) -> Unit,
     onActivate: (YtItem, List<YtItem>, (YtPlayable) -> Unit, (String) -> Unit) -> Unit,
+    onLoadInfo: () -> Unit = {},
+    onLoadComments: (Boolean) -> Unit = {},
+    onLoadMoreComments: () -> Unit = {},
+    onLoadReplies: (String) -> Unit = {},
+    onLoadMoreReplies: () -> Unit = {},
+    onClearReplies: () -> Unit = {},
+    onClearMessage: () -> Unit = {},
 ) {
-    var open by remember { mutableStateOf(false) }
+    var mode by remember { mutableStateOf<SidePanelMode?>(null) }
+    var lastMode by remember { mutableStateOf(SidePanelMode.MORE) }
     var loadingVideoId by remember { mutableStateOf<String?>(null) }
+    var replyingTo by remember { mutableStateOf<YtComment?>(null) }
 
-    // A new video is playing: clear any spinner left over from the previous one.
-    LaunchedEffect(videoId) { loadingVideoId = null }
-    BackHandler(enabled = open) { open = false }
+    // A new video is playing: clear any spinner and close a panel left over from the previous one.
+    LaunchedEffect(videoId) {
+        mode = null
+        loadingVideoId = null
+        replyingTo = null
+    }
+    LaunchedEffect(mode) { if (mode != null) lastMode = mode!! }
+    val shownMode = mode ?: lastMode
+    val currentItem = queue.firstOrNull { it.videoId == videoId }
+
+    fun open(next: SidePanelMode) {
+        if (next == SidePanelMode.INFO || next == SidePanelMode.COMMENTS) onLoadInfo()
+        mode = next
+    }
+
+    fun backToComments() {
+        onClearReplies()
+        replyingTo = null
+        mode = SidePanelMode.COMMENTS
+    }
+
+    BackHandler(enabled = mode != null) {
+        when (mode) {
+            SidePanelMode.REPLIES -> backToComments()
+            else -> mode = null
+        }
+    }
+
+    // Comments need the video's metadata first; load them as soon as it arrives.
+    LaunchedEffect(mode, state.info?.videoId) {
+        if (mode == SidePanelMode.COMMENTS && state.info != null &&
+            state.info.commentsKey != null && state.comments.isEmpty() && !state.commentsLoading
+        ) {
+            onLoadComments(state.commentsSort == 1)
+        }
+    }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        // The requested size: each thumbnail fills a quarter of the player's width. Item and list
-        // padding is added around it so the thumbnail itself lands on that quarter.
-        val thumbnailWidth = (maxWidth / 4).coerceIn(150.dp, 360.dp)
-        val panelWidth = (thumbnailWidth + 28.dp).coerceAtMost(maxWidth * 0.6f)
+        // One panel width for all three, so switching between them doesn't resize the overlay.
+        val panelWidth = (maxWidth * 0.44f).coerceIn(280.dp, 420.dp)
 
         AnimatedVisibility(
-            visible = buttonVisible && !open,
+            visible = buttonVisible && mode == null,
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .padding(end = 16.dp),
             enter = fadeIn(),
             exit = fadeOut(),
         ) {
-            Row(
-                modifier = Modifier
-                    .testTag("yt-more-videos-button")
-                    .clip(RoundedCornerShape(50))
-                    .background(Color(0xB3000000))
-                    .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(50))
-                    .clickable { open = true }
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.PlaylistPlay,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp),
+                SidePanelButton(
+                    label = "Info",
+                    icon = { tint -> Icon(Icons.Filled.Info, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp)) },
+                    testTag = "yt-info-button",
+                    onClick = { open(SidePanelMode.INFO) },
                 )
-                Text(
-                    text = "More Videos",
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
+                SidePanelButton(
+                    label = "More Videos",
+                    icon = { tint ->
+                        Icon(
+                            Icons.AutoMirrored.Filled.PlaylistPlay,
+                            contentDescription = null,
+                            tint = tint,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    testTag = "yt-more-videos-button",
+                    onClick = { open(SidePanelMode.MORE) },
+                )
+                SidePanelButton(
+                    label = "Comments",
+                    icon = { tint ->
+                        Icon(
+                            Icons.AutoMirrored.Filled.Comment,
+                            contentDescription = null,
+                            tint = tint,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    },
+                    testTag = "yt-comments-button",
+                    onClick = { open(SidePanelMode.COMMENTS) },
                 )
             }
         }
 
         AnimatedVisibility(
-            visible = open,
+            visible = mode != null,
             modifier = Modifier.align(Alignment.CenterEnd),
             enter = slideInHorizontally { it } + fadeIn(),
             exit = slideOutHorizontally { it } + fadeOut(),
@@ -155,74 +231,385 @@ internal fun YouTubeMoreVideosContent(
                     .width(panelWidth)
                     .background(Color(0xF5111114)),
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp, top = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.PlaylistPlay,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = "More Videos",
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(onClick = { open = false }) {
-                        Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White)
+                PanelHeader(
+                    mode = shownMode,
+                    replyingTo = replyingTo,
+                    onBack = ::backToComments,
+                    onClose = { mode = null },
+                )
+
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    when (shownMode) {
+                        SidePanelMode.INFO -> InfoPanel(state, currentItem)
+                        SidePanelMode.MORE -> MoreVideosPanel(
+                            videoId = videoId,
+                            queue = queue,
+                            loadingVideoId = loadingVideoId,
+                            onPlay = onPlay,
+                            onActivate = onActivate,
+                            onLoading = { loadingVideoId = it },
+                        )
+                        SidePanelMode.COMMENTS -> CommentsPanel(
+                            state = state,
+                            onSort = onLoadComments,
+                            onMore = onLoadMoreComments,
+                            onOpenReplies = { comment ->
+                                val key = comment.replyKey ?: return@CommentsPanel
+                                replyingTo = comment
+                                onLoadReplies(key)
+                                mode = SidePanelMode.REPLIES
+                            },
+                        )
+                        SidePanelMode.REPLIES -> RepliesPanel(state, onMore = onLoadMoreReplies)
                     }
                 }
 
-                if (queue.isEmpty()) {
-                    Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                        Text("No videos in this list.", color = Color(0xFFB0B0B0))
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                state.message?.let {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        itemsIndexed(
-                            items = queue,
-                            key = { index, item -> item.videoId ?: "slot-$index" },
-                        ) { _, item ->
-                            MoreVideoRow(
-                                item = item,
-                                current = item.videoId == videoId,
-                                loading = loadingVideoId == item.videoId,
-                                enabled = loadingVideoId == null,
-                                onClick = {
-                                    val id = item.videoId ?: return@MoreVideoRow
-                                    loadingVideoId = id
-                                    onActivate(
-                                        item,
-                                        queue,
-                                        { playable ->
-                                            loadingVideoId = null
-                                            onPlay(
-                                                YouTubePlayRequest(
-                                                    url = playable.url,
-                                                    title = playable.title,
-                                                    poster = playable.poster,
-                                                    videoId = playable.videoId,
-                                                    startPositionMs = playable.startPositionMs,
-                                                ),
-                                            )
-                                        },
-                                        { loadingVideoId = null },
-                                    )
-                                },
-                            )
+                        Text(it, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = onClearMessage) { Text("OK") }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SidePanelButton(
+    label: String,
+    icon: @Composable (Color) -> Unit,
+    testTag: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .testTag(testTag)
+            .clip(RoundedCornerShape(50))
+            .background(Color(0xB3000000))
+            .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        icon(Color.White)
+        Text(
+            text = label,
+            color = Color.White,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
+private fun PanelHeader(
+    mode: SidePanelMode,
+    replyingTo: YtComment?,
+    onBack: () -> Unit,
+    onClose: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 4.dp, top = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (mode == SidePanelMode.REPLIES) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to comments", tint = Color.White)
+            }
+        } else {
+            Icon(
+                when (mode) {
+                    SidePanelMode.INFO -> Icons.Filled.Info
+                    SidePanelMode.MORE -> Icons.AutoMirrored.Filled.PlaylistPlay
+                    else -> Icons.AutoMirrored.Filled.Comment
+                },
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(
+                when (mode) {
+                    SidePanelMode.INFO -> "Info"
+                    SidePanelMode.MORE -> "More Videos"
+                    SidePanelMode.COMMENTS -> "Comments"
+                    SidePanelMode.REPLIES -> "Replies"
+                },
+                color = Color.White,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            if (mode == SidePanelMode.REPLIES && replyingTo != null) {
+                Text(
+                    "Replying to ${replyingTo.author}",
+                    color = Color(0xFF9A9A9A),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        IconButton(onClick = onClose) {
+            Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.White)
+        }
+    }
+}
+
+@Composable
+private fun InfoPanel(state: YtPlayerState, currentItem: YtItem?) {
+    val info = state.info
+    when {
+        info == null && state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = Color.White)
+        }
+        info == null -> Centered(state.message ?: "Couldn't load this video's details.")
+        else -> LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            currentItem?.thumbnail?.takeIf { it.isNotBlank() }?.let { thumbnail ->
+                item {
+                    AsyncImage(
+                        model = thumbnail,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFF222222)),
+                    )
+                }
+            }
+            item {
+                Text(
+                    info.title,
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    info.authorImage?.let {
+                        AsyncImage(
+                            model = it,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(36.dp).clip(CircleShape),
+                        )
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(info.author, color = Color.White, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        info.subscribers?.takeIf { it.isNotBlank() }?.let {
+                            Text(it, color = Color(0xFF9A9A9A), style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
             }
+            val stats = listOfNotNull(
+                info.viewCount?.takeIf { it.isNotBlank() }?.let { countLabel(it, "views") },
+                info.published?.takeIf { it.isNotBlank() },
+                info.likeCount?.takeIf { it.isNotBlank() }?.let { countLabel(it, "likes") },
+            )
+            if (stats.isNotEmpty()) {
+                item {
+                    Text(
+                        stats.joinToString("  ·  "),
+                        color = Color(0xFFB0B0B0),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            info.description?.takeIf { it.isNotBlank() }?.let { description ->
+                item {
+                    Text(
+                        description,
+                        color = Color(0xFFD8D8D8),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            if (info.chapters.isNotEmpty()) {
+                item {
+                    Text("Chapters", color = Color.White, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                }
+                itemsIndexed(info.chapters) { _, chapter ->
+                    Text(
+                        "${formatTime(chapter.second)}  ${chapter.first}",
+                        color = Color(0xFFD8D8D8),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MoreVideosPanel(
+    videoId: String,
+    queue: List<YtItem>,
+    loadingVideoId: String?,
+    onPlay: (YouTubePlayRequest) -> Unit,
+    onActivate: (YtItem, List<YtItem>, (YtPlayable) -> Unit, (String) -> Unit) -> Unit,
+    onLoading: (String?) -> Unit,
+) {
+    if (queue.isEmpty()) {
+        Centered("No videos in this list.")
+        return
+    }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        itemsIndexed(
+            items = queue,
+            key = { index, item -> item.videoId ?: "slot-$index" },
+        ) { _, item ->
+            MoreVideoRow(
+                item = item,
+                current = item.videoId == videoId,
+                loading = loadingVideoId == item.videoId,
+                enabled = loadingVideoId == null,
+                onClick = {
+                    val id = item.videoId ?: return@MoreVideoRow
+                    onLoading(id)
+                    onActivate(
+                        item,
+                        queue,
+                        { playable ->
+                            onLoading(null)
+                            onPlay(
+                                YouTubePlayRequest(
+                                    url = playable.url,
+                                    title = playable.title,
+                                    poster = playable.poster,
+                                    videoId = playable.videoId,
+                                    startPositionMs = playable.startPositionMs,
+                                ),
+                            )
+                        },
+                        { onLoading(null) },
+                    )
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun CommentsPanel(
+    state: YtPlayerState,
+    onSort: (Boolean) -> Unit,
+    onMore: () -> Unit,
+    onOpenReplies: (YtComment) -> Unit,
+) {
+    val info = state.info
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Sort by", style = MaterialTheme.typography.bodySmall, color = Color(0xFFB0B0B0))
+            FilterChip(
+                selected = state.commentsSort == 0,
+                onClick = { onSort(false) },
+                label = { Text("Top") },
+            )
+            FilterChip(
+                selected = state.commentsSort == 1,
+                onClick = { onSort(true) },
+                label = { Text("Newest") },
+            )
+        }
+        when {
+            info == null && state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Color.White)
+            }
+            info != null && info.commentsKey == null -> Centered("Comments are off for this video.")
+            state.commentsLoading && state.comments.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Color.White)
+            }
+            state.comments.isEmpty() -> Centered("No comments to show.")
+            else -> LazyColumn(
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                itemsIndexed(state.comments) { _, comment ->
+                    CommentRow(comment, onOpenReplies = onOpenReplies)
+                }
+                if (state.canLoadMoreComments) {
+                    item {
+                        LaunchedEffect(state.comments.size) { onMore() }
+                        Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(Modifier.size(24.dp), color = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RepliesPanel(state: YtPlayerState, onMore: () -> Unit) {
+    when {
+        state.repliesLoading && state.replies.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = Color.White)
+        }
+        state.replies.isEmpty() -> Centered("No replies to show.")
+        else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            itemsIndexed(state.replies) { _, comment -> CommentRow(comment, onOpenReplies = null) }
+            if (state.canLoadMoreReplies) {
+                item {
+                    LaunchedEffect(state.replies.size) { onMore() }
+                    Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(Modifier.size(24.dp), color = Color.White)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CommentRow(c: YtComment, onOpenReplies: ((YtComment) -> Unit)?) {
+    val opensReplies = onOpenReplies != null && c.replyKey != null
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(enabled = opensReplies) { onOpenReplies?.invoke(c) }
+            .padding(horizontal = 6.dp, vertical = 8.dp),
+    ) {
+        Text(c.author, style = MaterialTheme.typography.labelMedium, color = Color(0xFFB0B0B0))
+        Spacer(Modifier.height(2.dp))
+        Text(c.text, style = MaterialTheme.typography.bodyMedium, color = Color.White)
+        val meta = listOfNotNull(
+            c.published,
+            c.likes?.takeIf { it.isNotBlank() }?.let { countLabel(it, "likes") },
+        ).joinToString("  ·  ")
+        if (meta.isNotEmpty()) {
+            Text(meta, style = MaterialTheme.typography.bodySmall, color = Color(0xFF909090))
+        }
+        if (opensReplies) {
+            Text(
+                replyLabel(c.replyCount),
+                style = MaterialTheme.typography.labelMedium,
+                color = Color(0xFFE53935),
+                modifier = Modifier.padding(top = 4.dp),
+            )
         }
     }
 }
@@ -311,5 +698,31 @@ private fun MoreVideoRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+    }
+}
+
+@Composable
+private fun Centered(text: String) {
+    Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = Color(0xFFB0B0B0))
+    }
+}
+
+/** YouTube often hands back "1.2M views" but sometimes a bare number; don't double the noun. */
+private fun countLabel(value: String, noun: String): String =
+    if (value.any(Char::isLetter)) value else "$value $noun"
+
+private fun replyLabel(replyCount: String?): String =
+    replyCount?.takeIf { it.isNotBlank() }?.let { if (it.any(Char::isLetter)) it else "$it replies" } ?: "Replies"
+
+private fun formatTime(ms: Long): String {
+    val total = (ms / 1000).coerceAtLeast(0)
+    val hours = total / 3600
+    val minutes = (total % 3600) / 60
+    val seconds = total % 60
+    return if (hours > 0) {
+        "$hours:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}"
+    } else {
+        "$minutes:${seconds.toString().padStart(2, '0')}"
     }
 }

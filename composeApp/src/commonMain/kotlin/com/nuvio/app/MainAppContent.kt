@@ -974,7 +974,7 @@ internal fun MainAppContent(
                 streamSubtitle = rec.channelName,
                 pauseDescription = rec.description,
                 providerName = rec.channelName,
-                providerAddonId = LiveTvPlayback.PROVIDER_ID + "-recording",
+                providerAddonId = LiveTvPlayback.RECORDING_PROVIDER_ID,
                 contentType = LiveTvPlayback.CONTENT_TYPE,
                 videoId = "recording:" + rec.id,
                 parentMetaId = "recording:" + rec.id,
@@ -1962,6 +1962,7 @@ internal fun MainAppContent(
                         openExternalStreamUrl = ::openExternalStreamUrl,
                         onOpenPartyMedia = ::openPartyMedia,
                         onOpenAddonCatalog = openAddonCatalogAction,
+                        onAddChannelToMultiView = ::addLiveChannelToMultiView,
                     )
                 }
                 entry<CatalogRoute> { route ->

@@ -27,6 +27,7 @@ fun PlayerScreen(
     onOpenPartyMedia: (PartyMedia) -> Unit = {},
     onQuickChannelsClick: (() -> Unit)? = null,
     onOpenAddonCatalog: ((manifestUrl: String, catalog: AddonCatalog) -> Unit)? = null,
+    onAddChannelToMultiView: ((com.nuvio.app.features.livetv.model.LiveChannel) -> Unit)? = null,
     modifier: Modifier = Modifier,
     logo: String? = null,
     poster: String? = null,
@@ -99,6 +100,7 @@ fun PlayerScreen(
             stream = stream,
             onQuickChannelsClick = onQuickChannelsClick,
             onOpenAddonCatalog = onOpenAddonCatalog,
+            onAddChannelToMultiView = onAddChannelToMultiView,
         )
     )
 }

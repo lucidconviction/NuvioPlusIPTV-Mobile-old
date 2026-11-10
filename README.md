@@ -1,6 +1,6 @@
 <div align="center">
 
-# Nuvio + IPTV Mobile
+# Lucid Nuvio IPTV+ Mobile
 
 **A community fork of Nuvio + IPTV Mobile, with a full music hub, YouTube sports replays, and a smoother everyday player.**
 

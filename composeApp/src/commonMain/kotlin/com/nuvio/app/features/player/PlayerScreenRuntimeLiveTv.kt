@@ -3,7 +3,9 @@ package com.nuvio.app.features.player
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nuvio.app.features.livetv.data.LiveTvRepository
 import com.nuvio.app.features.livetv.model.LiveChannel
+import com.nuvio.app.features.livetv.model.LiveTvClock
 import com.nuvio.app.features.livetv.player.LiveTvPlayback
 import com.nuvio.app.features.livetv.ui.LiveTvPlayerOverlay
 import com.nuvio.app.features.livetv.ui.LiveTvViewState
@@ -11,6 +13,10 @@ import com.nuvio.app.features.livetv.ui.LiveTvViewState
 /** Whether a Live TV channel (or a catch-up replay of one) is playing. */
 internal val PlayerScreenRuntime.isLiveTv: Boolean
     get() = LiveTvPlayback.owns(activeProviderAddonId)
+
+/** Whether what's playing came from the Live TV section: live, catch-up, a recording or On Demand. */
+internal val PlayerScreenRuntime.isLiveTvContent: Boolean
+    get() = LiveTvPlayback.ownsContent(activeProviderAddonId)
 
 /** The title for the controls: the channel now on screen, which changes as you switch channels. */
 internal fun PlayerScreenRuntime.liveTitleOr(fallback: String): String =
@@ -50,18 +56,38 @@ internal fun PlayerScreenRuntime.switchLiveChannel(channel: LiveChannel, nowTitl
     activeVideoId = channel.key
     activeInitialPositionMs = 0L
     activeInitialProgressFraction = null
+    // Show the incoming channel's own artwork while it tunes in, even if the previous source
+    // never finished loading (the artwork effect below keeps it in sync afterwards).
+    streamTransition = PlayerStreamTransition(
+        artwork = channel.thumbnail?.takeIf { it.isNotBlank() }
+            ?: channel.logo?.takeIf { it.isNotBlank() }
+            ?: background ?: poster,
+        logo = channel.logo?.takeIf { it.isNotBlank() } ?: logo,
+        title = channel.name,
+    )
 }
 
 /** The artwork/logo/title of the source being tuned in, used by the stream transition overlay. */
 internal fun PlayerScreenRuntime.incomingStreamTransition(): PlayerStreamTransition {
     val channel = if (isLiveTv) {
         val key = activeVideoId
-        key?.let { LiveTvViewState.list.value.visible.firstOrNull { channel -> channel.key == key } }
+        key?.let { channelKey ->
+            LiveTvViewState.list.value.visible.firstOrNull { channel -> channel.key == channelKey }
+                // A channel just switched to inside the player may not be in the filtered list yet.
+                ?: LiveTvPlayback.lastSwitchedChannel?.takeIf { it.key == channelKey }
+        }
     } else {
         null
     }
+    // When the channel has no thumbnail of its own, its current show's artwork reads better than
+    // the (usually transparent) channel logo.
+    val nowProgram = channel?.let { c ->
+        val now = LiveTvClock.nowMs()
+        LiveTvRepository.programs.value[c.key]?.firstOrNull { it.startMs <= now && it.stopMs > now }
+    }
     return PlayerStreamTransition(
         artwork = channel?.thumbnail?.takeIf { it.isNotBlank() }
+            ?: nowProgram?.icon?.takeIf { it.isNotBlank() }
             ?: channel?.logo?.takeIf { it.isNotBlank() }
             ?: background ?: poster,
         logo = channel?.logo?.takeIf { it.isNotBlank() } ?: logo,
@@ -72,14 +98,17 @@ internal fun PlayerScreenRuntime.incomingStreamTransition(): PlayerStreamTransit
 /** The channel panel and channel swiping, over a playing Live TV channel. */
 @Composable
 internal fun PlayerScreenRuntime.RenderLiveTvChannels() {
-    if (!isLiveTv) return
+    if (!isLiveTvContent) return
     val isInPip = rememberIsInPictureInPicture()
     LiveTvPlayerOverlay(
         currentKey = activeVideoId,
         controlsVisible = controlsVisible,
         enabled = !isInPip && !playerControlsLocked,
+        // Only a live channel changes on a swipe; On Demand and recordings keep their gestures.
+        swipeEnabled = isLiveTv && !isInPip && !playerControlsLocked,
         onPanelOpened = { controlsVisible = false },
         onSwitch = { channel, nowTitle -> switchLiveChannel(channel, nowTitle) },
+        onAddToMultiView = { channel -> args.onAddChannelToMultiView?.invoke(channel) },
         onOpenAddonCatalog = { manifestUrl, catalog -> args.onOpenAddonCatalog?.invoke(manifestUrl, catalog) },
         onPlayAddonCatalogItem = { item, addon, onFinished ->
             playAddonCatalogItem(item, addon, onFinished)

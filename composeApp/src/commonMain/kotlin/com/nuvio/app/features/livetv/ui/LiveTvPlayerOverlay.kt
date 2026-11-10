@@ -11,6 +11,7 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -114,8 +115,12 @@ internal fun LiveTvPlayerOverlay(
     currentKey: String?,
     controlsVisible: Boolean,
     enabled: Boolean,
+    /** Swipe up/down changes channels only while a live channel is playing. */
+    swipeEnabled: Boolean = enabled,
     onPanelOpened: () -> Unit,
     onSwitch: (LiveChannel, nowTitle: String?) -> Unit,
+    /** Long-pressing a Quick Channels result sends that stream to Multi-view. */
+    onAddToMultiView: (LiveChannel) -> Unit = {},
     onOpenAddonCatalog: (manifestUrl: String, catalog: AddonCatalog) -> Unit = { _, _ -> },
     /** Plays an add-on catalog item in place; [onFinished] gets true when playback switched. */
     onPlayAddonCatalogItem: (MetaPreview, ManagedAddon, (Boolean) -> Unit) -> Unit = { _, _, onFinished -> onFinished(false) },
@@ -160,7 +165,7 @@ internal fun LiveTvPlayerOverlay(
     val swipeSection by rememberUpdatedState(section)
     val swipeKey by rememberUpdatedState(currentKey)
     val swipeSwitch by rememberUpdatedState(onSwitch)
-    DisposableEffect(enabled) {
+    DisposableEffect(swipeEnabled) {
         val handler: (Boolean) -> Unit = handler@{ next ->
             val list = swipeSection?.channels ?: return@handler
             if (list.size < 2) return@handler
@@ -173,7 +178,7 @@ internal fun LiveTvPlayerOverlay(
             swipeSwitch(target, nowTitle(target))
             banner = target
         }
-        if (enabled) LiveTvPlayback.channelSwipe = handler
+        if (swipeEnabled) LiveTvPlayback.channelSwipe = handler
         onDispose { if (LiveTvPlayback.channelSwipe === handler) LiveTvPlayback.channelSwipe = null }
     }
     LaunchedEffect(banner) {
@@ -186,6 +191,15 @@ internal fun LiveTvPlayerOverlay(
         val tablet = minOf(maxWidth, maxHeight) >= 600.dp
         val landscape = maxWidth > maxHeight
         val guide = showGuide ?: tablet
+        // Upright: the button sits halfway between the bottom of the 16:9 video and the seek bar,
+        // still on the right edge. Sideways keeps it at the middle of the right edge.
+        val uprightVideoBottom = maxHeight / 2 + maxWidth * (9f / 32f)
+        val uprightProgressTop = (maxHeight - 148.dp).coerceAtLeast(uprightVideoBottom)
+        val channelsOffsetY = if (landscape) {
+            0.dp
+        } else {
+            ((uprightVideoBottom + uprightProgressTop) / 2 - maxHeight / 2).coerceAtLeast(0.dp)
+        }
 
         // A few seconds of "what's on" after a swipe.
         AnimatedVisibility(
@@ -199,7 +213,11 @@ internal fun LiveTvPlayerOverlay(
         AnimatedVisibility(
             visible = controlsVisible && !panelOpen && enabled,
             enter = fadeIn(), exit = fadeOut(),
-            modifier = Modifier.align(Alignment.CenterEnd).safeDrawingPadding().padding(end = NuvioTokens.Space.s16),
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .offset(y = channelsOffsetY)
+                .safeDrawingPadding()
+                .padding(end = NuvioTokens.Space.s16),
         ) {
             Row(
                 modifier = Modifier
@@ -327,7 +345,7 @@ internal fun LiveTvPlayerOverlay(
                     if (guide) {
                         MiniGuide(channels, currentKey, now, onSwitch = { c, t -> onSwitch(c, t) })
                     } else if (quickChannels) {
-                        PlayerQuickChannelsPanel(onSwitch = onSwitch)
+                        PlayerQuickChannelsPanel(onSwitch = onSwitch, onAddToMultiView = onAddToMultiView)
                     } else {
                         val start = channels.indexOfFirst { it.key == currentKey }.coerceAtLeast(0)
                         val listState = rememberLazyListState(initialFirstVisibleItemIndex = start)
@@ -399,8 +417,16 @@ private fun SegmentButton(label: String, selected: Boolean, modifier: Modifier, 
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun PanelChannelRow(channel: LiveChannel, now: EpgProgram?, nowMs: Long, playing: Boolean, onClick: () -> Unit) {
+private fun PanelChannelRow(
+    channel: LiveChannel,
+    now: EpgProgram?,
+    nowMs: Long,
+    playing: Boolean,
+    onLongClick: (() -> Unit)? = null,
+    onClick: () -> Unit,
+) {
     val tokens = MaterialTheme.nuvio
     val settings by LiveTvPreferences.settings.collectAsStateWithLifecycle()
     val shape = RoundedCornerShape(NuvioTokens.Radius.lg)
@@ -410,7 +436,7 @@ private fun PanelChannelRow(channel: LiveChannel, now: EpgProgram?, nowMs: Long,
             .clip(shape)
             .background(if (playing) tokens.colors.accent.copy(alpha = 0.22f) else tokens.colors.surface)
             .border(if (playing) 1.5.dp else 0.dp, if (playing) tokens.colors.accent else Color.Transparent, shape)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = NuvioTokens.Space.s8, vertical = NuvioTokens.Space.s8),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s10),
@@ -547,7 +573,10 @@ private fun MiniGuideRow(
  * appear (the "checking" state is shown while probing).
  */
 @Composable
-private fun PlayerQuickChannelsPanel(onSwitch: (LiveChannel, String?) -> Unit) {
+private fun PlayerQuickChannelsPanel(
+    onSwitch: (LiveChannel, String?) -> Unit,
+    onAddToMultiView: (LiveChannel) -> Unit,
+) {
     val tokens = MaterialTheme.nuvio
     val c = tokens.colors
     val liveChannels by LiveTvRepository.displayChannels.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -645,7 +674,14 @@ private fun PlayerQuickChannelsPanel(onSwitch: (LiveChannel, String?) -> Unit) {
                     contentPadding = PaddingValues(bottom = NuvioTokens.Space.s8),
                 ) {
                     items(sortedMatches, key = { it.key }) { ch ->
-                        PanelChannelRow(ch, null, LiveTvClock.nowMs(), playing = false) { onSwitch(ch, null) }
+                        PanelChannelRow(
+                            ch,
+                            null,
+                            LiveTvClock.nowMs(),
+                            playing = false,
+                            onClick = { onSwitch(ch, null) },
+                            onLongClick = { onAddToMultiView(ch) },
+                        )
                     }
                 }
             }
