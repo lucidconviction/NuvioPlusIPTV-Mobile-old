@@ -68,9 +68,9 @@ import kotlinx.coroutines.flow.flowOf
 /**
  * The player's YouTube side buttons: Info, More Videos and Comments.
  *
- * The buttons sit in a row just above the player's title and progress bar. Each opens the same
- * right-side panel; More Videos lists the queue the current video was picked from, Info shows the
- * video's details, and Comments shows its comments with replies one layer deeper.
+ * The buttons sit in a centered row just above the player's title and progress bar. Each opens the
+ * same right-side panel; More Videos lists the queue the current video was picked from, Info shows
+ * the video's details, and Comments shows its comments with replies one layer deeper.
  */
 @Composable
 fun YouTubeMoreVideos(
@@ -179,8 +179,8 @@ internal fun YouTubePlayerSidePanelsContent(
         AnimatedVisibility(
             visible = buttonVisible && mode == null,
             modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 16.dp, bottom = bottomInset + 10.dp),
+                .align(Alignment.BottomCenter)
+                .padding(bottom = bottomInset + 10.dp),
             enter = fadeIn(),
             exit = fadeOut(),
         ) {
