@@ -252,15 +252,6 @@ class YouTubePlayerViewModel (private val context: Context) : ViewModel() {
 
     // ---- comments ----
 
-    private fun toComment(c: CommentItem) = YtComment(
-        author = c.authorName.orEmpty(),
-        text = c.message.orEmpty(),
-        likes = c.likeCount,
-        published = c.publishedDate,
-        replyKey = c.nestedCommentsKey?.takeIf { it.isNotBlank() },
-        replyCount = c.replyCount?.takeIf { it.isNotBlank() }
-    )
-
     /** Loads the comments in the chosen order. Does nothing if that order is already showing. */
     fun loadComments(newest: Boolean = _state.value.commentsSort == 1) {
         val info = _state.value.info ?: return
@@ -296,7 +287,7 @@ class YouTubePlayerViewModel (private val context: Context) : ViewModel() {
             _state.update { s ->
                 s.copy(
                     commentsLoading = false,
-                    comments = s.comments + group?.comments.orEmpty().filter { !it.isEmpty }.map(::toComment),
+                    comments = s.comments + group?.comments.orEmpty().toYtComments(),
                     canLoadMoreComments = group?.nextCommentsKey != null,
                     message = if (result.isFailure) "Couldn't load comments." else null
                 )
@@ -335,7 +326,7 @@ class YouTubePlayerViewModel (private val context: Context) : ViewModel() {
             _state.update { s ->
                 s.copy(
                     repliesLoading = false,
-                    replies = s.replies + group?.comments.orEmpty().filter { !it.isEmpty }.map(::toComment),
+                    replies = s.replies + group?.comments.orEmpty().toYtComments(),
                     canLoadMoreReplies = group?.nextCommentsKey != null,
                     message = if (result.isFailure) "Couldn't load replies." else null
                 )
@@ -373,3 +364,21 @@ class YouTubePlayerViewModel (private val context: Context) : ViewModel() {
         stopChat()
     }
 }
+
+/**
+ * Turns a comments page into rows. Comments without replies aren't empty: [CommentItem.isEmpty]
+ * only means "nothing to open", so keeping it would hide every reply.
+ */
+internal fun Iterable<CommentItem?>.toYtComments(): List<YtComment> =
+    filterNotNull()
+        .map { c ->
+            YtComment(
+                author = c.authorName.orEmpty(),
+                text = c.message.orEmpty(),
+                likes = c.likeCount,
+                published = c.publishedDate,
+                replyKey = c.nestedCommentsKey?.takeIf { it.isNotBlank() },
+                replyCount = c.replyCount?.takeIf { it.isNotBlank() },
+            )
+        }
+        .filter { it.text.isNotBlank() }

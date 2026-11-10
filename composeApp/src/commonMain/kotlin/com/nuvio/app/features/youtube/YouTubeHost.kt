@@ -2,6 +2,7 @@ package com.nuvio.app.features.youtube
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 
 /** What the YouTube page hands back when you pick a video. */
 data class YouTubePlayRequest(
@@ -71,8 +72,8 @@ object YouTubeHost {
     /** Drawn over the player while a YouTube video plays: the up-next card, and starting the next video when this one ends. */
     var playerOverlay: (@Composable (videoId: String, positionMs: Long, durationMs: Long, ended: Boolean, playNext: (YouTubePlayRequest) -> Unit) -> Unit)? = null
 
-    /** The player's "More Videos" button and the list the current video was picked from. */
-    var moreVideos: (@Composable (videoId: String, buttonVisible: Boolean, onPlay: (YouTubePlayRequest) -> Unit) -> Unit)? = null
+    /** The player's Info/More Videos/Comments buttons and their side panels. */
+    var moreVideos: (@Composable (videoId: String, buttonVisible: Boolean, bottomInset: Dp, onPlay: (YouTubePlayRequest) -> Unit) -> Unit)? = null
 
     /** The data and actions behind the YouTube buttons in the player's controls. [openPanel] shows the panel. */
     var playerControls: (@Composable (videoId: String, openPanel: () -> Unit) -> YouTubePlayerAction)? = null

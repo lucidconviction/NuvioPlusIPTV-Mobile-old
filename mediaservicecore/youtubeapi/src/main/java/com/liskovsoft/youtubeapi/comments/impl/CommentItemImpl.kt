@@ -10,7 +10,9 @@ import com.liskovsoft.youtubeapi.common.models.gen.getText
 
 internal data class CommentItemImpl(val commentItemWrapper: CommentItemWrapper): CommentItem {
     private val commentRenderer by lazy {
+        // Replies come back as plain commentRenderers; top-level comments are wrapped in a thread.
         commentItemWrapper.commentThreadRenderer?.comment?.commentRenderer
+            ?: commentItemWrapper.commentRenderer
     }
 
     private val idItem by lazy { commentRenderer?.commentId }

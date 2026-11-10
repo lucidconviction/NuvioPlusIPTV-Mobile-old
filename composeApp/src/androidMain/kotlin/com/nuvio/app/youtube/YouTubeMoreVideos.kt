@@ -57,6 +57,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -67,14 +68,15 @@ import kotlinx.coroutines.flow.flowOf
 /**
  * The player's YouTube side buttons: Info, More Videos and Comments.
  *
- * The buttons sit in a column at the middle of the right edge. Each opens the same right-side
- * panel; More Videos lists the queue the current video was picked from, Info shows the video's
- * details, and Comments shows its comments with replies one layer deeper.
+ * The buttons sit in a row just above the player's title and progress bar. Each opens the same
+ * right-side panel; More Videos lists the queue the current video was picked from, Info shows the
+ * video's details, and Comments shows its comments with replies one layer deeper.
  */
 @Composable
 fun YouTubeMoreVideos(
     videoId: String,
     buttonVisible: Boolean,
+    bottomInset: Dp,
     onPlay: (YouTubePlayRequest) -> Unit,
 ) {
     val context = LocalContext.current.applicationContext
@@ -89,6 +91,7 @@ fun YouTubeMoreVideos(
         queue = queue,
         state = state,
         buttonVisible = buttonVisible,
+        bottomInset = bottomInset,
         onPlay = onPlay,
         onActivate = { item, from, onReady, onError ->
             if (feed == null) {
@@ -118,6 +121,7 @@ internal fun YouTubePlayerSidePanelsContent(
     buttonVisible: Boolean,
     onPlay: (YouTubePlayRequest) -> Unit,
     onActivate: (YtItem, List<YtItem>, (YtPlayable) -> Unit, (String) -> Unit) -> Unit,
+    bottomInset: Dp = 0.dp,
     onLoadInfo: () -> Unit = {},
     onLoadComments: (Boolean) -> Unit = {},
     onLoadMoreComments: () -> Unit = {},
@@ -175,14 +179,14 @@ internal fun YouTubePlayerSidePanelsContent(
         AnimatedVisibility(
             visible = buttonVisible && mode == null,
             modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 16.dp),
+                .align(Alignment.BottomEnd)
+                .padding(end = 16.dp, bottom = bottomInset + 10.dp),
             enter = fadeIn(),
             exit = fadeOut(),
         ) {
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 SidePanelButton(
                     label = "Info",
@@ -292,15 +296,15 @@ private fun SidePanelButton(
             .background(Color(0xB3000000))
             .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(50))
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         icon(Color.White)
         Text(
             text = label,
             color = Color.White,
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
         )
     }

@@ -323,13 +323,18 @@ private fun Replies(state: YtPlayerState, vm: YouTubePlayerViewModel) {
 
 @Composable
 private fun CommentRow(c: YtComment, onReplies: ((String) -> Unit)?) {
-    Column {
+    val key = c.replyKey
+    val opensReplies = key != null && onReplies != null
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clickable(enabled = opensReplies) { key?.let { onReplies?.invoke(it) } },
+    ) {
         Text(c.author, style = MaterialTheme.typography.labelMedium, color = Color(0xFFB0B0B0))
         Spacer(Modifier.height(2.dp))
         Text(c.text, style = MaterialTheme.typography.bodyMedium)
         val meta = listOfNotNull(c.published, c.likes?.let { "$it likes" }).joinToString("  ·  ")
         if (meta.isNotEmpty()) Text(meta, style = MaterialTheme.typography.bodySmall, color = Color(0xFF909090))
-        val key = c.replyKey
         if (key != null && onReplies != null) {
             val label = c.replyCount?.let { if (it.any(Char::isLetter)) it else "$it replies" } ?: "Replies"
             TextButton(onClick = { onReplies(key) }) { Text(label) }

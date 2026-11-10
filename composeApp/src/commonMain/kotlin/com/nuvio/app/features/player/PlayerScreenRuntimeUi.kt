@@ -17,8 +17,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.ui.NuvioStatusModal
 import com.nuvio.app.core.ui.NuvioToastController
@@ -299,20 +302,26 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
             )
         }
 
+        // YouTube's button row sits directly above the title/progress/actions block.
+        var youtubeButtonsBottomInset by remember { mutableStateOf(0.dp) }
         RenderPlayerControls(
             displayedPositionMs = displayedPositionMs,
             isEpisode = isEpisode,
             folded = fold != null,
             modifier = panelModifier,
+            onTimelineHeightChanged = { youtubeButtonsBottomInset = it },
         )
-        // YouTube's "More Videos": a strip of the list the current video was picked from.
+        // YouTube's panel buttons and their lists.
         if (contentType == "youtube") {
             val youTubeVideoId = activeVideoId
             val moreVideos = YouTubeHost.moreVideos
             if (youTubeVideoId != null && moreVideos != null) {
+                val inset = youtubeButtonsBottomInset.takeIf { it > 0.dp }
+                    ?: (metrics.sliderBottomOffset + 104.dp)
                 moreVideos(
                     youTubeVideoId,
                     controlsVisible && !playerControlsLocked && errorMessage == null && !isInPip && !isPanelOpen,
+                    inset,
                 ) { request ->
                     YouTubeHost.openVideo?.invoke(request)
                 }
@@ -368,6 +377,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(
     isEpisode: Boolean,
     folded: Boolean,
     modifier: Modifier,
+    onTimelineHeightChanged: (Dp) -> Unit = {},
 ) {
     val isInPip = rememberIsInPictureInPicture()
     val partyState by PartyRepository.state.collectAsStateWithLifecycle()
@@ -587,6 +597,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(
                 controlsVisible = true
                 controlsActivityTick += 1
             },
+            onTimelineHeightChanged = onTimelineHeightChanged,
         )
     }
     AnimatedVisibility(
