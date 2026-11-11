@@ -326,6 +326,18 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                     YouTubeHost.openVideo?.invoke(request)
                 }
             }
+            // Auto-play the next video when this one ends, and show its up-next card near the end.
+            val playerOverlay = YouTubeHost.playerOverlay
+            if (youTubeVideoId != null && playerOverlay != null) {
+                playerOverlay(
+                    youTubeVideoId,
+                    playbackSnapshot.positionMs,
+                    playbackSnapshot.durationMs,
+                    playbackSnapshot.isEnded,
+                ) { request ->
+                    YouTubeHost.openVideo?.invoke(request)
+                }
+            }
         }
         Box(modifier = videoModifier) {
             RenderPlaybackOverlays(
