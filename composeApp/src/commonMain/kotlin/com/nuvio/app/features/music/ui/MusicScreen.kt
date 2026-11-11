@@ -884,17 +884,35 @@ private fun MusicPlayer(track: MusicTrack, modifier: Modifier = Modifier) {
     var scrimAlpha by remember { mutableFloatStateOf(0f) }
     var scrimReady by remember { mutableStateOf(true) }
     var incomingReady by remember { mutableStateOf(false) }
+    var autoAdvanceFromTrackId by remember { mutableStateOf<String?>(null) }
+    var crossfadeMs by remember { mutableIntStateOf(MUSIC_CROSSFADE_MS) }
+    var surfaceTransitionMs by remember { mutableIntStateOf(MUSIC_SURFACE_TRANSITION_MS) }
+    val trackChangedThisFrame = lastTrackId != track.id
+    // The 20-second overlap crossfade only happens when this change came from the early advance.
+    val autoCrossfade = trackChangedThisFrame && crossfadeMs == AUTO_CROSSFADE_MS
     SideEffect {
         if (lastTrackId != track.id) {
+            val auto = crossfadeMs == AUTO_CROSSFADE_MS
             lastTrackId = track.id
             transitionCount += 1
             stopOutgoing = 0
-            scrimReady = false
             incomingReady = false
+            if (auto) {
+                autoAdvanceFromTrackId = null
+                // Both pictures are visible during the long crossfade; no black cover.
+                scrimAlpha = 0f
+                scrimReady = true
+            } else {
+                scrimReady = false
+            }
         }
     }
     LaunchedEffect(transitionCount) {
         if (transitionCount == 0) return@LaunchedEffect
+        if (autoCrossfade) {
+            scrimReady = true
+            return@LaunchedEffect
+        }
         // Bring the black cover up before the next surface is created; the new picture then
         // fades in from black once its player is ready.
         animate(scrimAlpha, 1f, animationSpec = tween(300, easing = LinearEasing)) { value, _ ->
@@ -920,7 +938,6 @@ private fun MusicPlayer(track: MusicTrack, modifier: Modifier = Modifier) {
     }
     val controller = controllers[track.id]
     val snapshot = snapshots[track.id] ?: PlayerPlaybackSnapshot()
-    val trackChangedThisFrame = lastTrackId != track.id
     // The first track starts at full volume; every later track fades in over the outgoing one.
     val fadeInIncoming = transitionCount > 0 || trackChangedThisFrame
     var dragFraction by remember(track.id) { mutableStateOf<Float?>(null) }
@@ -939,6 +956,11 @@ private fun MusicPlayer(track: MusicTrack, modifier: Modifier = Modifier) {
     fun wakeChrome() {
         chromeVisible = true
         chromeInteractionTick += 1
+    }
+
+    fun prepareManualTransition() {
+        crossfadeMs = MUSIC_CROSSFADE_MS
+        surfaceTransitionMs = MUSIC_SURFACE_TRANSITION_MS
     }
 
     LaunchedEffect(chromeVisible) {
@@ -971,8 +993,23 @@ private fun MusicPlayer(track: MusicTrack, modifier: Modifier = Modifier) {
                 current.play()
                 scope.launch { fadeMusicVolume(current, 0f, 1f) {} }
             }
-            else -> MusicPlayerRepository.advanceOnEnd()
+            else -> {
+                prepareManualTransition()
+                MusicPlayerRepository.advanceOnEnd()
+            }
         }
+    }
+    // Start the next song 20 seconds before this one ends, so both can crossfade.
+    val nearEndForCrossfade = snapshot.isPlaying && !snapshot.isLoading && !snapshot.isEnded &&
+        snapshot.durationMs > AUTO_CROSSFADE_MS.toLong() &&
+        snapshot.durationMs - snapshot.positionMs in 1..AUTO_CROSSFADE_MS.toLong()
+    LaunchedEffect(track.id, nearEndForCrossfade, repeat) {
+        if (!nearEndForCrossfade || repeat == MusicRepeatMode.ONE) return@LaunchedEffect
+        if (autoAdvanceFromTrackId == track.id) return@LaunchedEffect
+        autoAdvanceFromTrackId = track.id
+        crossfadeMs = AUTO_CROSSFADE_MS
+        surfaceTransitionMs = AUTO_CROSSFADE_MS
+        MusicPlayerRepository.advanceOnEnd()
     }
 
     Column(
@@ -1017,8 +1054,8 @@ private fun MusicPlayer(track: MusicTrack, modifier: Modifier = Modifier) {
                 AnimatedContent(
                     targetState = track,
                     transitionSpec = {
-                        fadeIn(tween(MUSIC_SURFACE_TRANSITION_MS, easing = LinearEasing)) togetherWith
-                            fadeOut(tween(MUSIC_SURFACE_TRANSITION_MS, easing = LinearEasing))
+                        fadeIn(tween(surfaceTransitionMs, easing = LinearEasing)) togetherWith
+                            fadeOut(tween(surfaceTransitionMs, easing = LinearEasing))
                     },
                     contentKey = { it.id },
                     modifier = Modifier.fillMaxSize(),
@@ -1031,6 +1068,7 @@ private fun MusicPlayer(track: MusicTrack, modifier: Modifier = Modifier) {
                         audioOnly = audioOnly,
                         stopSignal = stopOutgoing,
                         showSurface = scrimReady && !trackChangedThisFrame,
+                        crossfadeMs = crossfadeMs,
                         onControllerReady = { id, ready ->
                             controllers[id] = ready
                             if (id == track.id) incomingReady = true
@@ -1069,7 +1107,12 @@ private fun MusicPlayer(track: MusicTrack, modifier: Modifier = Modifier) {
                         Icon(Icons.Filled.Shuffle, contentDescription = "Shuffle", tint = if (shuffle) tokens.colors.accent else tokens.colors.textMuted)
                     }
                     IconButton(onClick = {
-                        if (snapshot.positionMs > 3_000L) controller?.seekTo(0L) else MusicPlayerRepository.previous()
+                        if (snapshot.positionMs > 3_000L) {
+                            controller?.seekTo(0L)
+                        } else {
+                            prepareManualTransition()
+                            MusicPlayerRepository.previous()
+                        }
                     }) { Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous", tint = tokens.colors.textPrimary) }
                     IconButton(
                         onClick = {
@@ -1087,7 +1130,10 @@ private fun MusicPlayer(track: MusicTrack, modifier: Modifier = Modifier) {
                     ) {
                         Icon(if (snapshot.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = if (snapshot.isPlaying) "Pause" else "Play", tint = tokens.colors.onAccent, modifier = Modifier.size(NuvioTokens.Icon.lg))
                     }
-                    IconButton(onClick = { MusicPlayerRepository.next() }) { Icon(Icons.Filled.SkipNext, contentDescription = "Next", tint = tokens.colors.textPrimary) }
+                    IconButton(onClick = {
+                        prepareManualTransition()
+                        MusicPlayerRepository.next()
+                    }) { Icon(Icons.Filled.SkipNext, contentDescription = "Next", tint = tokens.colors.textPrimary) }
                     IconButton(onClick = { MusicPlayerRepository.cycleRepeat() }) {
                         Icon(if (repeat == MusicRepeatMode.ONE) Icons.Filled.RepeatOne else Icons.Filled.Repeat, contentDescription = "Repeat", tint = if (repeat != MusicRepeatMode.OFF) tokens.colors.accent else tokens.colors.textMuted)
                     }
@@ -1110,7 +1156,13 @@ private fun MusicPlayer(track: MusicTrack, modifier: Modifier = Modifier) {
     }
 
     if (showLyrics) MusicLyricsSheet(track, snapshot.positionMs, onDismiss = { showLyrics = false })
-    if (showQueue) MusicQueueSheet(onDismiss = { showQueue = false })
+    if (showQueue) MusicQueueSheet(
+        onDismiss = { showQueue = false },
+        onPlayTrack = { index ->
+            prepareManualTransition()
+            MusicPlayerRepository.playFromQueue(index)
+        },
+    )
     if (showSave) MusicSaveSheet(track, onDismiss = { showSave = false })
 }
 
@@ -1126,6 +1178,7 @@ private fun MusicVideoPane(
     audioOnly: Boolean,
     stopSignal: Int,
     showSurface: Boolean,
+    crossfadeMs: Int,
     onControllerReady: (String, PlayerEngineController) -> Unit,
     onSnapshot: (String, PlayerPlaybackSnapshot) -> Unit,
     onDisposePane: (String) -> Unit,
@@ -1147,7 +1200,7 @@ private fun MusicVideoPane(
         onDispose { onDisposePane(track.id) }
     }
 
-    LaunchedEffect(isCurrent, controller, stopSignal) {
+    LaunchedEffect(isCurrent, controller, stopSignal, crossfadeMs) {
         val current = controller ?: return@LaunchedEffect
         when {
             !isCurrent && stopSignal > stopAtStart -> {
@@ -1155,8 +1208,8 @@ private fun MusicVideoPane(
                 current.setVolume(0f)
                 volume = 0f
             }
-            !isCurrent -> fadeMusicVolume(current, volume, 0f) { volume = it }
-            fadeInOnStart -> fadeMusicVolume(current, volume, 1f) { volume = it }
+            !isCurrent -> fadeMusicVolume(current, volume, 0f, crossfadeMs) { volume = it }
+            fadeInOnStart -> fadeMusicVolume(current, volume, 1f, crossfadeMs) { volume = it }
             else -> {
                 current.setVolume(1f)
                 volume = 1f
@@ -1222,11 +1275,15 @@ private fun MusicVideoPane(
 private const val MUSIC_CROSSFADE_MS = 1200
 private const val MUSIC_SURFACE_TRANSITION_MS = 2200
 
+/** The next track starts this early and the two overlap while the old one fades out. */
+private const val AUTO_CROSSFADE_MS = 20_000
+
 /** Ramps a player's own volume; the caller keeps its matching UI state in sync through [onValue]. */
 private suspend fun fadeMusicVolume(
     controller: PlayerEngineController,
     from: Float,
     to: Float,
+    durationMs: Int = MUSIC_CROSSFADE_MS,
     onValue: (Float) -> Unit,
 ) {
     if (from == to) {
@@ -1234,7 +1291,7 @@ private suspend fun fadeMusicVolume(
         onValue(to)
         return
     }
-    animate(from, to, animationSpec = tween(MUSIC_CROSSFADE_MS, easing = LinearEasing)) { value, _ ->
+    animate(from, to, animationSpec = tween(durationMs, easing = LinearEasing)) { value, _ ->
         controller.setVolume(value)
         onValue(value)
     }
@@ -1296,7 +1353,7 @@ private fun MusicLyricsSheet(track: MusicTrack, positionMs: Long, onDismiss: () 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MusicQueueSheet(onDismiss: () -> Unit) {
+private fun MusicQueueSheet(onDismiss: () -> Unit, onPlayTrack: (Int) -> Unit) {
     val tokens = MaterialTheme.nuvio
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val queue by MusicPlayerRepository.queue.collectAsStateWithLifecycle()
@@ -1310,7 +1367,7 @@ private fun MusicQueueSheet(onDismiss: () -> Unit) {
                 itemsIndexed(queue, key = { _, item -> item.id }) { index, item ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         MusicTrackListRow(item, Modifier.weight(1f)) {
-                            MusicPlayerRepository.playFromQueue(index)
+                            onPlayTrack(index)
                             onDismiss()
                         }
                         IconButton(onClick = { MusicPlayerRepository.removeFromQueue(index) }) {
