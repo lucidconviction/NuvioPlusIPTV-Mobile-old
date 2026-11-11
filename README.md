@@ -2,151 +2,119 @@
 
 # Lucid Nuvio IPTV+ Mobile
 
-**A community fork of Nuvio + IPTV Mobile, with a full music hub, YouTube sports replays, and a smoother everyday player.**
+**Live TV, sports, movies, series, YouTube and a full music hub — in one Android app.**
 
-A Live TV guide, a Sports hub that finds every game on your own channels, catch-up, recordings, your provider's movies and series, and now a complete music experience — in one app for Android phones and tablets.
-
+[![Latest release](https://img.shields.io/github/v/release/lucidconviction/lucid-nuvio-iptvplus-mobile?style=for-the-badge)](https://github.com/lucidconviction/lucid-nuvio-iptvplus-mobile/releases/latest)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=for-the-badge)](LICENSE)
-[![Based on Nuvio Mobile](https://img.shields.io/badge/based%20on-NuvioMedia%2FNuvioMobile-8A2BE2?style=for-the-badge)](https://github.com/NuvioMedia/NuvioMobile)
+[![Platform](https://img.shields.io/badge/platform-Android%207.0%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/lucidconviction/lucid-nuvio-iptvplus-mobile/releases/latest)
 
-[Music](#-music-hub) · [Sports replays](#-sports-replays) · [Player](#-player-and-live-tv-improvements) · [Features](#-everything-from-nuvio--iptv) · [Build](#-build-from-source) · [Support](#-support-this-fork) · [Credits](#-credits)
+[Install](#-install) · [Features](#-features) · [Screenshots](#-screenshots) · [Credits](#-credits) · [Legal](#-legal)
 
 </div>
 
 ---
 
-## ✨ What this fork adds
+## 📱 Screenshots
 
-This fork keeps everything from Nuvio + IPTV Mobile and adds:
+<div align="center">
 
-- **A complete Music hub** — browse, search, build a library, follow artists, make playlists, read synced lyrics, download songs for offline listening, and watch music videos or listen in audio-only mode.
-- **YouTube sports replays** — a Replays tab on Sports, plus pre-event and post-event videos on every game page.
-- **A smoother player** — the player follows the device's current orientation, stream validation and resilient playlist updates, a draggable in-app PiP, and multi-view.
-- **Crossfading music transitions** — audio overlaps between tracks and the picture transitions cleanly instead of cutting.
-- **YouTube in Continue Watching** — a YouTube video you were watching on Home reopens and plays through the app's YouTube engine.
+| Music | Live TV | Sports |
+|:---:|:---:|:---:|
+| <img src="screenshots/music.jpg" width="240" alt="Music hub"> | <img src="screenshots/live-tv.jpg" width="240" alt="Live TV and channel groups"> | <img src="screenshots/sports.jpg" width="240" alt="Sports scores and live events"> |
+| **YouTube** | **Player** | **Video info** |
+| <img src="screenshots/youtube.jpg" width="240" alt="YouTube search and videos"> | <img src="screenshots/player.jpg" width="240" alt="Player with Info, More Videos and Comments"> | <img src="screenshots/youtube-info.jpg" width="240" alt="Video details panel"> |
 
----
-
-## 🎵 Music hub
-
-Open **Music** from the navigation bar, just before Settings.
-
-### Browse and discover
-- **Home** with a featured track, trending songs, new releases, artists, playlists and genres.
-- **Search** songs, artists, albums and playlists from one box, with filters for each type.
-- **Artist pages** with top songs, albums and related artists.
-- **Album pages** with artwork, release date, track list and play/save actions.
-- **Playlist pages** with the full track list and one-tap playback.
-- **Genre browsing** for charts and mood-based discovery.
-
-### Your library
-- **Like songs** and save artists and albums.
-- **Create local playlists**, add songs from anywhere, and keep them on the device.
-- **Queue** view with jump-to-track and remove.
-- **Shuffle** and **repeat off / all / one**.
-- **Downloads** for offline listening, with a Downloads tab and per-song removal.
-
-### Playback
-- **Video / Audio switch** on both the Music page and the player, sharing one state.
-- **Centred video window** with the app's own player — no full-screen route and no external app.
-- **Audio mode** shows the cover art while the song keeps playing; downloaded songs show their cover and play locally.
-- **Synced lyrics** with automatic scrolling to the current line.
-- **Crossfade** between tracks: the outgoing audio fades out while the next fades in, the picture transitions smoothly, repeat-one restarts softly, and pausing during a transition stops the outgoing side.
-- **Music videos** are resolved through the app's YouTube engine, so the same player, captions and quality controls are used everywhere.
+</div>
 
 ---
 
-## 🏆 Sports replays
+## ✨ Features
 
-Sports already shows scores, schedules and which of your own channels are showing each game. This fork adds video:
+### 📺 Live TV your way
+- A full TV guide with channels, now/next programmes and a live time line.
+- Multiple M3U playlists and XMLTV guides, merged into one guide.
+- Xtream logins, including your provider's movies and series.
+- Favourites, hidden groups, channel reordering and custom channel logos.
+- Catch-up, reminders and recordings.
+- Quick Channels for fast switching without leaving the player.
+- Channels access for every Live TV source, including catch-up and recordings.
+- Multi-view for watching more than one channel at once.
 
-- **Replays tab** directly after Following, with a sport filter and YouTube rows for the sports you follow or the region you selected.
-- **Game pages** get a **Pre-event videos** row for upcoming and live games (commentary, previews, press conferences, weigh-ins) and a **Post-event videos** row for finished games (highlights, interviews, reaction).
-- Everything plays in the app's existing in-app YouTube player, with the same controls, quality options and autoplay behaviour.
+### 🏆 Sports
+- Scores, schedules and which of your channels are showing each game.
+- Follow teams and leagues, with reminders and scoring alerts.
+- A Replays tab with highlights and event videos.
+- Pre-event and post-event videos on every game page.
+
+### 🎵 Music
+- Browse, search and discover songs, artists, albums and playlists.
+- Like songs, follow artists, build playlists and download for offline listening.
+- Music videos or audio-only playback, with synced lyrics.
+- Shuffle and repeat modes, a queue view and a full-screen player.
+- Crossfade into the next track over the last 20 seconds.
+- Player controls and the navigation bar step aside after five seconds and return on touch.
+
+### ▶️ YouTube
+- Home, Subscriptions, History, Playlists, Channels, Live, Music, Gaming, News, Sports and Shorts.
+- Search and play videos in the app's own player.
+- Info, More Videos and Comments panels on the player.
+- Auto-play the next video when one finishes.
+- YouTube videos in Continue Watching.
+
+### 🎬 Movies, series and more
+- On Demand with categories, search, sorting and quality tags.
+- Addons, Library, Continue Watching and watch progress.
+- Trakt, Simkl and MDBList integrations.
+- Subtitles, parental controls and multiple profiles.
+- A player that follows your device orientation, with in-app PiP and gesture controls.
 
 ---
 
-## 📺 Player and Live TV improvements
+## 📦 Install
 
-- **Orientation follows the device.** The player no longer forces landscape; rotate only when you want to.
-- **Stream validation and resilient playlist updates** — bad or stale streams are handled without losing the guide, and large Xtream lists stream in reliably.
-- **In-app PiP** with a reliable press-and-hold drag, plus **Multi-view** for watching more than one stream at once.
-- **Quick Channels** in the player overlay for fast switching.
-- **Direct add-on playback** and safer add-on handling.
-- **Channel management** — hide, reorder and rename channels and groups; pick favorites; change channel logos; search rows and Xtream switches.
-- **Matching copies across sound layouts**, so the same channel is grouped sensibly when a provider lists several audio variants.
+1. Open the [latest release](https://github.com/lucidconviction/lucid-nuvio-iptvplus-mobile/releases/latest).
+2. Download the APK for your device:
+   - **arm64-v8a** — most modern phones and tablets
+   - **armeabi-v7a** — older 32-bit devices
+   - **x86_64** — emulators and x86 devices
+3. Open the downloaded APK and allow installs from your browser or file manager if Android asks.
+4. Launch **Lucid Nuvio IPTV+ Mobile** and add your own playlist or provider.
 
----
+**Requirements:** Android 7.0 or newer.
 
-## 📦 Everything from Nuvio + IPTV
-
-- **Live TV guide** with channels down the side, a timeline across, now/next highlighting, progress and a hideable "now" line.
-- **Multiple M3U playlists** and **multiple XMLTV guides**, merged into one guide.
-- **Xtream logins**, with your provider's movies and series if you enable them.
-- **Catch-up**, reminders and **recordings**.
-- **On Demand** with categories, search, sorting and source quality tags.
-- **Parental controls** with PIN locks for groups and categories.
-- **Sports hub** with My Sports, All Events, day tabs, team and league following, tables, game pages, reminders, scoring alerts, hide scores and record-a-game.
-- **Nuvio account sign-in** so your library, profiles and Live TV setup follow you across devices.
-- **Addons, library, Continue Watching, Trakt, Simkl, MDBList, subtitles and the Nuvio player** — all still here.
+The app ships with no channels, playlists or media. You choose your own sources. It installs alongside the official Nuvio app and other Nuvio-based clients.
 
 ---
 
-## 🚀 Build from source
+## 🔄 Updates
 
-Requirements:
-
-- **JDK 17**
-- **Android SDK** with the compile SDK from `gradle/libs.versions.toml`
-- `local.properties` containing `sdk.dir=/path/to/Android/sdk`
-
-Build the full debug APK:
-
-```bash
-./gradlew :androidApp:assembleFullDebug -Pnuvio.android.distribution=full
-```
-
-The APK is written to:
-
-```text
-androidApp/build/outputs/apk/full/debug/androidApp-full-debug.apk
-```
-
-Install it on a connected device:
-
-```bash
-adb install -r androidApp/build/outputs/apk/full/debug/androidApp-full-debug.apk
-```
-
-Requires **Android 7.0 or newer**. The app installs alongside the official Nuvio app and other Nuvio-based clients.
+The app can check for new versions from inside **Settings → About** and install the matching APK from the latest GitHub release. You can also download any new release manually from the link above.
 
 ---
 
 ## ☕ Support this fork
 
-If you like the app, feel free to buy me some tea — it's completely optional and very appreciated.
+If you enjoy the app, you can buy me some tea — completely optional and very appreciated.
 
 [![Buy me some tea](https://img.shields.io/badge/Buy%20me%20some%20tea-PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white)](https://www.paypal.me/Robbdeeze)
-
-**[paypal.me/Robbdeeze](https://www.paypal.me/Robbdeeze)**
 
 ---
 
 ## 🙏 Credits
 
-This fork would not exist without the people who built the projects underneath it:
+This project builds on the work of:
 
-- **[NuvioMedia / Nuvio Mobile](https://github.com/NuvioMedia/NuvioMobile)** — the upstream Nuvio client, its player, library, addons, sync and Compose Multiplatform foundation.
-- **[Nuvio + IPTV](https://github.com/homelessbrian/NuvioPlusIPTV)** and **[Nuvio + IPTV Mobile](https://github.com/homelessbrian/NuvioPlusIPTV-Mobile)** — the main Nuvio + IPTV projects, Live TV, Sports, On Demand, recordings and the IPTV setup this fork builds on.
-- **[Nuvio One](https://github.com/zoga2o3-ops/Nuvio-One)** — for the inspiration of bringing IPTV, YouTube and music together in one app.
-- **[ghbarker / NuvioMobile-IPTV](https://github.com/ghbarker/NuvioMobile-IPTV)** — the original IPTV port of Nuvio Mobile, used with permission and gratitude.
+- **[NuvioMedia / Nuvio Mobile](https://github.com/NuvioMedia/NuvioMobile)** — the upstream Nuvio client.
+- **[Nuvio + IPTV](https://github.com/homelessbrian/NuvioPlusIPTV)** and **[Nuvio + IPTV Mobile](https://github.com/homelessbrian/NuvioPlusIPTV-Mobile)** — Live TV, Sports, On Demand and the IPTV foundations.
+- **[Nuvio One](https://github.com/zoga2o3-ops/Nuvio-One)** — inspiration for bringing IPTV, YouTube and music together.
+- **[ghbarker / NuvioMobile-IPTV](https://github.com/ghbarker/NuvioMobile-IPTV)** — the original IPTV port of Nuvio Mobile.
 
 Thank you to every developer, tester and contributor in those projects. This fork is unofficial and is **not affiliated with or endorsed by NuvioMedia**. Please report issues with this fork here, not to the upstream teams.
 
-Data and content sources include public sports feeds, YouTube, public music catalogue metadata, and TMDB artwork. All names, logos and trademarks belong to their owners.
+---
 
 ## ⚖️ Legal
 
-This app is a client-side player. It does not host, store or distribute any media, and it ships with no channels, playlists or content sources. Only use sources you own or are authorized to access.
+This app is a client-side player. It does not host, store or distribute any media, and it ships with no channels, playlists or content sources. Only use sources you own or are authorised to access.
 
 Licensed under the **GNU General Public License v3.0**, like upstream Nuvio. See [LICENSE](LICENSE).
