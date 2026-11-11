@@ -1,6 +1,7 @@
 package com.nuvio.app.features.music.ui
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
@@ -9,6 +10,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -84,9 +88,16 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -919,6 +930,30 @@ private fun MusicPlayer(track: MusicTrack, modifier: Modifier = Modifier) {
     val isFavorite = favorites.any { it.id == track.id }
     val downloaded = MusicDownloadsRepository.isDownloaded(track.id)
     val isDownloading = track.id in downloading
+    val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    var chromeVisible by remember { mutableStateOf(true) }
+    var chromeInteractionTick by remember { mutableIntStateOf(0) }
+    val sheetOpen = showLyrics || showQueue || showSave
+
+    fun wakeChrome() {
+        chromeVisible = true
+        chromeInteractionTick += 1
+    }
+
+    LaunchedEffect(chromeVisible) {
+        MusicPlayerRepository.setPlayerChromeVisible(chromeVisible)
+        if (chromeVisible) focusManager.clearFocus() else focusRequester.requestFocus()
+    }
+    DisposableEffect(Unit) {
+        onDispose { MusicPlayerRepository.setPlayerChromeVisible(true) }
+    }
+    // The top bar, transport and actions fade out after five seconds without input while playing.
+    LaunchedEffect(chromeVisible, chromeInteractionTick, snapshot.isPlaying, snapshot.isEnded, sheetOpen) {
+        if (!chromeVisible || !snapshot.isPlaying || snapshot.isEnded || sheetOpen) return@LaunchedEffect
+        delay(5_000)
+        chromeVisible = false
+    }
 
     LaunchedEffect(downloadMessage) {
         if (downloadMessage != null) {
@@ -940,18 +975,41 @@ private fun MusicPlayer(track: MusicTrack, modifier: Modifier = Modifier) {
         }
     }
 
-    Column(modifier.fillMaxSize().background(tokens.colors.background).statusBarsPadding().padding(bottom = bottomPadding)) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = NuvioTokens.Space.s8, vertical = NuvioTokens.Space.s6),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8),
-        ) {
-            IconButton(onClick = { MusicPlayerRepository.close() }) { Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = tokens.colors.textPrimary) }
-            Column(Modifier.weight(1f)) {
-                Text("Now playing", style = MaterialTheme.typography.titleMedium, color = tokens.colors.textPrimary, fontWeight = FontWeight.SemiBold)
-                Text("Deezer · YouTube · ${queue.size} in queue", style = MaterialTheme.typography.labelSmall, color = tokens.colors.textMuted)
+    Column(
+        modifier
+            .fillMaxSize()
+            .background(tokens.colors.background)
+            .statusBarsPadding()
+            .padding(bottom = bottomPadding)
+            .focusRequester(focusRequester)
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                val wasHidden = !chromeVisible
+                wakeChrome()
+                // The first D-pad press only wakes the controls; it must not also click one.
+                wasHidden
             }
-            MusicModeToggle(audioOnly)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    wakeChrome()
+                }
+            }
+            .focusable(),
+    ) {
+        AnimatedVisibility(visible = chromeVisible, enter = fadeIn(), exit = fadeOut()) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = NuvioTokens.Space.s8, vertical = NuvioTokens.Space.s6),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s8),
+            ) {
+                IconButton(onClick = { MusicPlayerRepository.close() }) { Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = tokens.colors.textPrimary) }
+                Column(Modifier.weight(1f)) {
+                    Text("Now playing", style = MaterialTheme.typography.titleMedium, color = tokens.colors.textPrimary, fontWeight = FontWeight.SemiBold)
+                    Text("Deezer · YouTube · ${queue.size} in queue", style = MaterialTheme.typography.labelSmall, color = tokens.colors.textMuted)
+                }
+                MusicModeToggle(audioOnly)
+            }
         }
 
         Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = NuvioTokens.Space.s16), contentAlignment = Alignment.Center) {
@@ -988,63 +1046,65 @@ private fun MusicPlayer(track: MusicTrack, modifier: Modifier = Modifier) {
             }
         }
 
-        Column(Modifier.fillMaxWidth().padding(horizontal = NuvioTokens.Space.s16, vertical = NuvioTokens.Space.s8), verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s6)) {
-            Text(track.title, style = MaterialTheme.typography.titleLarge, color = tokens.colors.textPrimary, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(listOfNotNull(track.artist, track.album.takeIf { it.isNotBlank() && it != "Single" }).joinToString(" · "), style = MaterialTheme.typography.bodyMedium, color = tokens.colors.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val duration = snapshot.durationMs
-            val fraction = dragFraction ?: if (duration > 0L) (snapshot.positionMs.toFloat() / duration).coerceIn(0f, 1f) else 0f
-            Slider(
-                value = fraction,
-                onValueChange = { dragFraction = it },
-                onValueChangeFinished = {
-                    val target = dragFraction
-                    dragFraction = null
-                    if (target != null && duration > 0L) controller?.seekTo((target * duration).toLong())
-                },
-                enabled = duration > 0L,
-                colors = SliderDefaults.colors(thumbColor = tokens.colors.accent, activeTrackColor = tokens.colors.accent),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { MusicPlayerRepository.toggleShuffle() }) {
-                    Icon(Icons.Filled.Shuffle, contentDescription = "Shuffle", tint = if (shuffle) tokens.colors.accent else tokens.colors.textMuted)
-                }
-                IconButton(onClick = {
-                    if (snapshot.positionMs > 3_000L) controller?.seekTo(0L) else MusicPlayerRepository.previous()
-                }) { Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous", tint = tokens.colors.textPrimary) }
-                IconButton(
-                    onClick = {
-                        controller?.let {
-                            if (snapshot.isPlaying) {
-                                it.pause()
-                                // Pause also stops the outgoing track if a crossfade is still running.
-                                stopOutgoing += 1
-                            } else {
-                                it.play()
-                            }
-                        }
+        AnimatedVisibility(visible = chromeVisible, enter = fadeIn(), exit = fadeOut()) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = NuvioTokens.Space.s16, vertical = NuvioTokens.Space.s8), verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s6)) {
+                Text(track.title, style = MaterialTheme.typography.titleLarge, color = tokens.colors.textPrimary, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(listOfNotNull(track.artist, track.album.takeIf { it.isNotBlank() && it != "Single" }).joinToString(" · "), style = MaterialTheme.typography.bodyMedium, color = tokens.colors.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val duration = snapshot.durationMs
+                val fraction = dragFraction ?: if (duration > 0L) (snapshot.positionMs.toFloat() / duration).coerceIn(0f, 1f) else 0f
+                Slider(
+                    value = fraction,
+                    onValueChange = { dragFraction = it },
+                    onValueChangeFinished = {
+                        val target = dragFraction
+                        dragFraction = null
+                        if (target != null && duration > 0L) controller?.seekTo((target * duration).toLong())
                     },
-                    modifier = Modifier.padding(horizontal = NuvioTokens.Space.s12).size(56.dp).clip(CircleShape).background(tokens.colors.accent),
-                ) {
-                    Icon(if (snapshot.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = if (snapshot.isPlaying) "Pause" else "Play", tint = tokens.colors.onAccent, modifier = Modifier.size(NuvioTokens.Icon.lg))
+                    enabled = duration > 0L,
+                    colors = SliderDefaults.colors(thumbColor = tokens.colors.accent, activeTrackColor = tokens.colors.accent),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { MusicPlayerRepository.toggleShuffle() }) {
+                        Icon(Icons.Filled.Shuffle, contentDescription = "Shuffle", tint = if (shuffle) tokens.colors.accent else tokens.colors.textMuted)
+                    }
+                    IconButton(onClick = {
+                        if (snapshot.positionMs > 3_000L) controller?.seekTo(0L) else MusicPlayerRepository.previous()
+                    }) { Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous", tint = tokens.colors.textPrimary) }
+                    IconButton(
+                        onClick = {
+                            controller?.let {
+                                if (snapshot.isPlaying) {
+                                    it.pause()
+                                    // Pause also stops the outgoing track if a crossfade is still running.
+                                    stopOutgoing += 1
+                                } else {
+                                    it.play()
+                                }
+                            }
+                        },
+                        modifier = Modifier.padding(horizontal = NuvioTokens.Space.s12).size(56.dp).clip(CircleShape).background(tokens.colors.accent),
+                    ) {
+                        Icon(if (snapshot.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = if (snapshot.isPlaying) "Pause" else "Play", tint = tokens.colors.onAccent, modifier = Modifier.size(NuvioTokens.Icon.lg))
+                    }
+                    IconButton(onClick = { MusicPlayerRepository.next() }) { Icon(Icons.Filled.SkipNext, contentDescription = "Next", tint = tokens.colors.textPrimary) }
+                    IconButton(onClick = { MusicPlayerRepository.cycleRepeat() }) {
+                        Icon(if (repeat == MusicRepeatMode.ONE) Icons.Filled.RepeatOne else Icons.Filled.Repeat, contentDescription = "Repeat", tint = if (repeat != MusicRepeatMode.OFF) tokens.colors.accent else tokens.colors.textMuted)
+                    }
                 }
-                IconButton(onClick = { MusicPlayerRepository.next() }) { Icon(Icons.Filled.SkipNext, contentDescription = "Next", tint = tokens.colors.textPrimary) }
-                IconButton(onClick = { MusicPlayerRepository.cycleRepeat() }) {
-                    Icon(if (repeat == MusicRepeatMode.ONE) Icons.Filled.RepeatOne else Icons.Filled.Repeat, contentDescription = "Repeat", tint = if (repeat != MusicRepeatMode.OFF) tokens.colors.accent else tokens.colors.textMuted)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                    PlayerAction(if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, if (isFavorite) "Remove from liked" else "Like") {
+                        MusicLibraryRepository.toggleFavorite(track)
+                    }
+                    PlayerAction(Icons.Filled.Subtitles, "Lyrics") { showLyrics = true }
+                    PlayerAction(Icons.Filled.QueueMusic, "Queue") { showQueue = true }
+                    PlayerAction(
+                        if (downloaded) Icons.Filled.Download else Icons.Filled.Download,
+                        when { downloaded -> "Downloaded"; isDownloading -> "Downloading…"; else -> "Download" },
+                        enabled = !downloaded && !isDownloading,
+                    ) { MusicDownloadsRepository.download(track) }
+                    PlayerAction(Icons.Filled.Add, "Save to playlist") { showSave = true }
                 }
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                PlayerAction(if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, if (isFavorite) "Remove from liked" else "Like") {
-                    MusicLibraryRepository.toggleFavorite(track)
-                }
-                PlayerAction(Icons.Filled.Subtitles, "Lyrics") { showLyrics = true }
-                PlayerAction(Icons.Filled.QueueMusic, "Queue") { showQueue = true }
-                PlayerAction(
-                    if (downloaded) Icons.Filled.Download else Icons.Filled.Download,
-                    when { downloaded -> "Downloaded"; isDownloading -> "Downloading…"; else -> "Download" },
-                    enabled = !downloaded && !isDownloading,
-                ) { MusicDownloadsRepository.download(track) }
-                PlayerAction(Icons.Filled.Add, "Save to playlist") { showSave = true }
             }
         }
     }

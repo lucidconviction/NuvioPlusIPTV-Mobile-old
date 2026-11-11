@@ -35,6 +35,7 @@ import com.nuvio.app.core.ui.FloatingNavigationItem
 import com.nuvio.app.core.ui.PlatformBackHandler
 import com.nuvio.app.core.ui.rememberNuvioNavBarScrollState
 import com.nuvio.app.features.livetv.data.LiveTvPreferences
+import com.nuvio.app.features.music.MusicPlayerRepository
 import com.nuvio.app.features.profiles.NuvioProfile
 import com.nuvio.app.features.profiles.ProfileSwitcherTab
 import com.nuvio.app.features.settings.NavBarStyle
@@ -88,6 +89,15 @@ internal fun MainTabsDestination(
         val liveTvSettings by remember { LiveTvPreferences.settings }.collectAsStateWithLifecycle()
         val showLiveTvTab = liveTvSettings.showInSidebar
         val liveTvLabel = stringResource(Res.string.livetv_title)
+        val musicTrack by MusicPlayerRepository.current.collectAsStateWithLifecycle()
+        val musicChromeVisible by MusicPlayerRepository.playerChromeVisible.collectAsStateWithLifecycle()
+        // The full-screen music player uses the whole screen: its nav bar follows its controls.
+        val musicPlayerOpen = selectedTab == AppScreenTab.Music && musicTrack != null
+        val hideMusicPlayerNavBar = musicPlayerOpen && !musicChromeVisible
+        val bottomNavigationOverlayPadding =
+            if (useNativeBottomTabs) 49.dp
+            else if (!isTabletLayout && navBarStyleSetting != NavBarStyle.CLASSIC) 72.dp
+            else 0.dp
         val floatingNavigationItems = listOfNotNull(
             FloatingNavigationItem(
                 selected = selectedTab == AppScreenTab.Home,
@@ -149,7 +159,7 @@ internal fun MainTabsDestination(
             containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets(0),
             bottomBar = {
-                if (!isTabletLayout && !useNativeBottomTabs && navBarStyleSetting == NavBarStyle.CLASSIC) {
+                if (!isTabletLayout && !useNativeBottomTabs && navBarStyleSetting == NavBarStyle.CLASSIC && !hideMusicPlayerNavBar) {
                     NuvioClassicNavigationBar {
                         NavItem(
                             selected = selectedTab == AppScreenTab.Home,
@@ -210,7 +220,7 @@ internal fun MainTabsDestination(
         ) { innerPadding ->
             Box(modifier = Modifier.fillMaxSize()) {
                 CompositionLocalProvider(
-                    LocalNuvioBottomNavigationOverlayPadding provides if (useNativeBottomTabs) 49.dp else if (!isTabletLayout && navBarStyleSetting != NavBarStyle.CLASSIC) 72.dp else 0.dp,
+                    LocalNuvioBottomNavigationOverlayPadding provides if (hideMusicPlayerNavBar) 0.dp else bottomNavigationOverlayPadding,
                     LocalNuvioNavBarScrollState provides navBarScrollState,
                 ) {
                     AppTabHost(
@@ -226,7 +236,7 @@ internal fun MainTabsDestination(
                     )
                 }
 
-                if (isTabletLayout && !useNativeBottomTabs) {
+                if (isTabletLayout && !useNativeBottomTabs && !hideMusicPlayerNavBar) {
                     val tabletNavBarScrollState = remember { NuvioNavBarScrollState().apply { collapse() } }
                     FloatingNavigationBar(
                         modifier = Modifier.align(Alignment.TopCenter).widthIn(max = 416.dp),
@@ -242,7 +252,7 @@ internal fun MainTabsDestination(
                     )
                 }
 
-                if (!isTabletLayout && !useNativeBottomTabs && navBarStyleSetting != NavBarStyle.CLASSIC) {
+                if (!isTabletLayout && !useNativeBottomTabs && navBarStyleSetting != NavBarStyle.CLASSIC && !hideMusicPlayerNavBar) {
                     when (navBarStyleSetting) {
                         NavBarStyle.EXPANDED -> navBarScrollState.expand()
                         NavBarStyle.COMPACT -> navBarScrollState.collapse()

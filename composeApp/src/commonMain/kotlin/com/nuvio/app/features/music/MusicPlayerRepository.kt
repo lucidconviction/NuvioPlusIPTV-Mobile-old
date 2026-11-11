@@ -28,14 +28,24 @@ internal object MusicPlayerRepository {
     private val _repeat = MutableStateFlow(MusicRepeatMode.OFF)
     val repeat: StateFlow<MusicRepeatMode> = _repeat.asStateFlow()
 
+    /** Whether the full-screen player's controls (and the app nav bar) are showing. */
+    private val _playerChromeVisible = MutableStateFlow(true)
+    val playerChromeVisible: StateFlow<Boolean> = _playerChromeVisible.asStateFlow()
+
+    fun setPlayerChromeVisible(visible: Boolean) {
+        _playerChromeVisible.value = visible
+    }
+
     fun play(track: MusicTrack, queue: List<MusicTrack>) {
         val ordered = if (_shuffle.value) queue.shuffled(Random.Default) else queue
         _queue.value = ordered.ifEmpty { listOf(track) }
         _current.value = track
+        _playerChromeVisible.value = true
     }
 
     fun close() {
         _current.value = null
+        _playerChromeVisible.value = true
     }
 
     fun setAudioOnly(audioOnly: Boolean) {
