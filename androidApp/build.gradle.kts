@@ -165,6 +165,10 @@ androidComponents {
     }
     onVariants(selector().withBuildType("debug")) { variant ->
         variant.applicationId.set("com.lucid.nuvioiptvplus.mobile.debug")
+        // Keep "debug" out of the APK file name users see when sideloading a test build.
+        variant.outputs.forEach { output ->
+            output.outputFileName.set("LucidNuvioIPTVPlus-Mobile-$releaseAppVersionName.apk")
+        }
     }
 }
 
