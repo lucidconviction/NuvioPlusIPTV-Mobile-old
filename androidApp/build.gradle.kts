@@ -138,7 +138,7 @@ android {
         getByName("release") {
             val minifyRelease = providers.gradleProperty("releaseMinifyEnabled")
                 .map(String::toBooleanStrict)
-                .getOrElse(true)
+                .getOrElse(false)
             isMinifyEnabled = minifyRelease
             isShrinkResources = minifyRelease
             proguardFiles(
