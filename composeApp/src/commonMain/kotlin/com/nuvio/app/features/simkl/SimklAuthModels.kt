@@ -1,5 +1,6 @@
 package com.nuvio.app.features.simkl
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 enum class SimklConnectionMode {
@@ -27,6 +28,7 @@ data class SimklAuthUiState(
     val accountId: Long? = null,
     val tokenExpiresAtEpochMs: Long? = null,
     val pendingAuthorizationStartedAtEpochMs: Long? = null,
+    val pinUserCode: String? = null,
     val error: SimklAuthError? = null,
 )
 
@@ -40,6 +42,11 @@ internal data class SimklStoredAuthState(
     val grantedScope: String? = null,
     val pendingAuthorizationState: String? = null,
     val pendingAuthorizationStartedAtEpochMs: Long? = null,
+    val pendingPinUserCode: String? = null,
+    val pendingPinVerificationUrl: String? = null,
+    val pendingPinIntervalSeconds: Long? = null,
+    val pendingPinExpiresAtEpochMs: Long? = null,
+    val pendingPinNextPollAtEpochMs: Long? = null,
 ) {
     val hasPendingAuthorization: Boolean
         get() = !pendingAuthorizationState.isNullOrBlank()
@@ -72,3 +79,19 @@ internal sealed interface SimklAuthCallback {
     data object Invalid : SimklAuthCallback
     data object NotSimkl : SimklAuthCallback
 }
+
+@Serializable
+internal data class SimklPinStartResponse(
+    @SerialName("user_code") val userCode: String? = null,
+    @SerialName("verification_url") val verificationUrl: String? = null,
+    @SerialName("verification_uri") val verificationUri: String? = null,
+    @SerialName("expires_in") val expiresIn: Long? = null,
+    val interval: Long? = null,
+)
+
+@Serializable
+internal data class SimklPinPollResponse(
+    val result: String? = null,
+    @SerialName("access_token") val accessToken: String? = null,
+    val message: String? = null,
+)

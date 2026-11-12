@@ -45,6 +45,7 @@ data class AppUpdaterUiState(
     val showUnknownSourcesDialog: Boolean = false,
     val errorMessage: String? = null,
     val isDebugTest: Boolean = false,
+    val hasChecked: Boolean = false,
 )
 
 class AppUpdaterController internal constructor(
@@ -60,6 +61,9 @@ class AppUpdaterController internal constructor(
     private var downloadJob: Job? = null
 
     init {
+        scope.launch {
+            _uiState.collect { AppUpdaterStatus.update(it) }
+        }
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             preferences.channel.collect { channel ->
                 if (channel != _uiState.value.updateChannel) {
@@ -131,6 +135,7 @@ class AppUpdaterController internal constructor(
                         showDialog = shouldShowDialog,
                         showUnknownSourcesDialog = false,
                         errorMessage = null,
+                        hasChecked = true,
                     )
                 }
 
@@ -148,6 +153,7 @@ class AppUpdaterController internal constructor(
                         isUpdateAvailable = false,
                         showDialog = force && error !is NoChannelReleaseException,
                         showUnknownSourcesDialog = false,
+                        hasChecked = true,
                         errorMessage = if (force && error !is NoChannelReleaseException) {
                             error.message ?: getString(Res.string.updates_check_failed)
                         } else {
@@ -334,6 +340,16 @@ class AppUpdaterController internal constructor(
                 )
             }
         }
+    }
+}
+
+/** Last updater state, so Settings → About can show a persistent result. */
+internal object AppUpdaterStatus {
+    private val _state = MutableStateFlow(AppUpdaterUiState())
+    val state: StateFlow<AppUpdaterUiState> = _state.asStateFlow()
+
+    internal fun update(value: AppUpdaterUiState) {
+        _state.value = value
     }
 }
 

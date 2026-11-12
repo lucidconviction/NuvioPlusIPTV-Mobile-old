@@ -103,6 +103,8 @@ import nuvio.composeapp.generated.resources.settings_simkl_finish_sign_in
 import nuvio.composeapp.generated.resources.settings_simkl_invalid_callback
 import nuvio.composeapp.generated.resources.settings_simkl_missing_credentials
 import nuvio.composeapp.generated.resources.settings_simkl_open_login
+import nuvio.composeapp.generated.resources.settings_simkl_open_pin
+import nuvio.composeapp.generated.resources.settings_simkl_pin_description
 import nuvio.composeapp.generated.resources.settings_simkl_sign_in_description
 import nuvio.composeapp.generated.resources.settings_simkl_sign_in_failed
 import nuvio.composeapp.generated.resources.settings_simkl_sync_info_action
@@ -299,9 +301,9 @@ private fun SimklProviderCard(
         connectedDescription = stringResource(Res.string.settings_simkl_connected_description),
         signInDescription = stringResource(Res.string.settings_simkl_sign_in_description),
         finishSignInLabel = stringResource(Res.string.settings_simkl_finish_sign_in),
-        approvalDescription = stringResource(Res.string.settings_tracking_approval_redirect),
+        approvalDescription = stringResource(Res.string.settings_simkl_pin_description),
         connectLabel = stringResource(Res.string.settings_simkl_connect),
-        openLoginLabel = stringResource(Res.string.settings_simkl_open_login),
+        openLoginLabel = stringResource(Res.string.settings_simkl_open_pin),
         disconnectLabel = stringResource(Res.string.settings_simkl_disconnect),
         syncLabel = stringResource(Res.string.settings_simkl_sync_now),
         infoLabel = stringResource(Res.string.settings_simkl_sync_info_action),
@@ -310,6 +312,7 @@ private fun SimklProviderCard(
         errorMessage = simklErrorMessage(uiState.error) ?: syncErrorMessage,
         websiteLabel = stringResource(Res.string.settings_simkl_visit),
         websiteUrl = SIMKL_WEBSITE_URL,
+        authorizationCode = uiState.pinUserCode,
         onConnectRequested = SimklAuthRepository::onConnectRequested,
         onResumeAuthorization = {
             SimklAuthRepository.pendingAuthorizationUrl()

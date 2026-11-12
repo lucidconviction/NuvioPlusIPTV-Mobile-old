@@ -535,6 +535,10 @@
     <string name="compose_settings_root_appearance_description">Home, streams, collections, and detail pages</string>
     <string name="compose_settings_root_check_updates_description">Download latest release</string>
     <string name="compose_settings_root_check_updates_title">Check for updates</string>
+    <string name="settings_updates_checking">Checking for updates…</string>
+    <string name="settings_updates_latest">You\'re on the latest version (%1$s).</string>
+    <string name="settings_updates_available">Update available: %1$s</string>
+    <string name="settings_updates_failed">Couldn\'t check for updates.</string>
     <string name="compose_settings_whats_new_title">What\'s new</string>
     <string name="compose_settings_whats_new_description">Release notes and the changelog for every version.</string>
     <string name="compose_settings_root_content_discovery_description">Manage addons and discovery sources.</string>
@@ -1365,6 +1369,8 @@
     <string name="settings_simkl_disconnect">Disconnect</string>
     <string name="settings_simkl_finish_sign_in">Finish connection approval</string>
     <string name="settings_simkl_open_login">Open Simkl Login</string>
+    <string name="settings_simkl_open_pin">Open simkl.com/pin</string>
+    <string name="settings_simkl_pin_description">Enter this code at simkl.com/pin. This screen updates automatically once you approve it.</string>
     <string name="settings_simkl_sign_in_description">Connect Simkl to sync lists, watched history, playback progress, and scrobbles.</string>
     <string name="settings_simkl_missing_credentials">Missing SIMKL_CLIENT_ID</string>
     <string name="settings_simkl_visit">Visit Simkl</string>

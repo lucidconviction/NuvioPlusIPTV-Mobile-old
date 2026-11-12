@@ -9,12 +9,15 @@ import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.rounded.Policy
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.core.build.AppVersionConfig
+import com.nuvio.app.features.updater.AppUpdaterStatus
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.about_licenses_attributions_subtitle
 import nuvio.composeapp.generated.resources.about_supporters_contributors_subtitle
@@ -28,6 +31,10 @@ import nuvio.composeapp.generated.resources.compose_settings_root_check_updates_
 import nuvio.composeapp.generated.resources.compose_settings_root_check_updates_title
 import nuvio.composeapp.generated.resources.compose_settings_whats_new_description
 import nuvio.composeapp.generated.resources.compose_settings_whats_new_title
+import nuvio.composeapp.generated.resources.settings_updates_available
+import nuvio.composeapp.generated.resources.settings_updates_checking
+import nuvio.composeapp.generated.resources.settings_updates_failed
+import nuvio.composeapp.generated.resources.settings_updates_latest
 import nuvio.composeapp.generated.resources.compose_settings_root_privacy_policy_description
 import nuvio.composeapp.generated.resources.updates_debug_test_description
 import nuvio.composeapp.generated.resources.updates_debug_test_title
@@ -47,6 +54,7 @@ internal fun LazyListScope.aboutSettingsContent(
 ) {
     item {
         val uriHandler = LocalUriHandler.current
+        val updaterState by AppUpdaterStatus.state.collectAsStateWithLifecycle()
         SettingsSection(
             title = stringResource(Res.string.compose_settings_root_about_section),
             isTablet = isTablet,
@@ -96,6 +104,23 @@ internal fun LazyListScope.aboutSettingsContent(
                         isTablet = isTablet,
                         onClick = onCheckForUpdatesClick,
                     )
+                    val updateStatus = when {
+                        updaterState.isChecking -> stringResource(Res.string.settings_updates_checking)
+                        updaterState.isUpdateAvailable && updaterState.update != null ->
+                            stringResource(Res.string.settings_updates_available, updaterState.update!!.title)
+                        updaterState.errorMessage != null -> stringResource(Res.string.settings_updates_failed)
+                        updaterState.hasChecked ->
+                            stringResource(Res.string.settings_updates_latest, AppVersionConfig.VERSION_NAME)
+                        else -> null
+                    }
+                    if (updateStatus != null) {
+                        Text(
+                            text = updateStatus,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
                 if (onTestUpdateBannerClick != null) {
                     SettingsGroupDivider(isTablet = isTablet)

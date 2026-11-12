@@ -926,50 +926,18 @@ fun HomeScreen(
         }
     }
     val hasRenderableHomeRows = homeUiState.sections.isNotEmpty() || hasRenderableCollectionRows
-    val enabledCatalogKeys = remember(enabledHomeItems) {
-        enabledHomeItems.filterNot { it.isCollection }.mapTo(hashSetOf()) { it.key }
-    }
-    val topTenSource = remember(homeUiState.sections, enabledCatalogKeys) {
-        homeUiState.sections
-            .filter { it.key in enabledCatalogKeys && it.items.size >= 10 }
-            .firstOrNull { section ->
-                Regex("top|popular|trending|most watched", RegexOption.IGNORE_CASE)
-                    .containsMatchIn(section.title)
-            }
-    }
-    val topTenRow = topTenSource?.let { section ->
-        section.copy(
-            key = "home_top_10",
-            title = "Top 10 Today",
-            subtitle = section.addonName,
-            items = section.items.take(10),
-            availableItemCount = 10,
-            hasMore = false,
+    val homeSpotlights = remember(homeUiState.sections, enabledHomeItems, effectiveWatchProgressEntries) {
+        buildHomeSpotlightRows(
+            sections = homeUiState.sections,
+            enabledCatalogKeys = enabledHomeItems
+                .filterNot { it.isCollection }
+                .mapTo(hashSetOf()) { it.key },
+            progressEntries = effectiveWatchProgressEntries,
         )
     }
-    val becauseYouWatchedRow = remember(homeUiState.sections, enabledCatalogKeys, effectiveWatchProgressEntries, topTenSource) {
-        val latest = effectiveWatchProgressEntries
-            .filterNot { it.isCompleted }
-            .maxByOrNull { it.lastUpdatedEpochMs }
-            ?: return@remember null
-        val section = homeUiState.sections.firstOrNull { candidate ->
-            candidate.key in enabledCatalogKeys &&
-                candidate.key != topTenSource?.key &&
-                candidate.items.any { it.name.equals(latest.title, ignoreCase = true) }
-        } ?: return@remember null
-        val picks = section.items
-            .filterNot { it.name.equals(latest.title, ignoreCase = true) }
-            .take(10)
-        if (picks.size < 3) return@remember null
-        section.copy(
-            key = "home_because_you_watched",
-            title = "Because you watched ${latest.title}",
-            subtitle = section.addonName,
-            items = picks,
-            availableItemCount = picks.size,
-            hasMore = false,
-        )
-    }
+    val topTenSource = homeSpotlights.topTenSource
+    val topTenRow = homeSpotlights.topTen
+    val becauseYouWatchedRow = homeSpotlights.becauseYouWatched
     val showHeroSlot = shouldShowHomeHeroSlot(
         heroEnabled = homeSettingsUiState.heroEnabled,
         hasHeroItems = homeUiState.heroItems.isNotEmpty(),
