@@ -13,7 +13,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.LiveTv
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -35,7 +34,6 @@ import com.nuvio.app.core.ui.FloatingNavigationItem
 import com.nuvio.app.core.ui.PlatformBackHandler
 import com.nuvio.app.core.ui.rememberNuvioNavBarScrollState
 import com.nuvio.app.features.livetv.data.LiveTvPreferences
-import com.nuvio.app.features.music.MusicPlayerRepository
 import com.nuvio.app.features.profiles.NuvioProfile
 import com.nuvio.app.features.profiles.ProfileSwitcherTab
 import com.nuvio.app.features.settings.NavBarStyle
@@ -45,7 +43,6 @@ import dev.chrisbanes.haze.rememberHazeState
 import nuvio.composeapp.generated.resources.Res
 import nuvio.composeapp.generated.resources.compose_nav_home
 import nuvio.composeapp.generated.resources.compose_nav_library
-import nuvio.composeapp.generated.resources.compose_nav_music
 import nuvio.composeapp.generated.resources.compose_nav_profile
 import nuvio.composeapp.generated.resources.compose_nav_search
 import nuvio.composeapp.generated.resources.livetv_title
@@ -89,11 +86,6 @@ internal fun MainTabsDestination(
         val liveTvSettings by remember { LiveTvPreferences.settings }.collectAsStateWithLifecycle()
         val showLiveTvTab = liveTvSettings.showInSidebar
         val liveTvLabel = stringResource(Res.string.livetv_title)
-        val musicTrack by MusicPlayerRepository.current.collectAsStateWithLifecycle()
-        val musicChromeVisible by MusicPlayerRepository.playerChromeVisible.collectAsStateWithLifecycle()
-        // The full-screen music player uses the whole screen: its nav bar follows its controls.
-        val musicPlayerOpen = selectedTab == AppScreenTab.Music && musicTrack != null
-        val hideMusicPlayerNavBar = musicPlayerOpen && !musicChromeVisible
         val bottomNavigationOverlayPadding =
             if (useNativeBottomTabs) 49.dp
             else if (!isTabletLayout && navBarStyleSetting != NavBarStyle.CLASSIC) 72.dp
@@ -129,12 +121,6 @@ internal fun MainTabsDestination(
                 icon = Icons.Filled.LiveTv,
                 label = liveTvLabel,
             ) else null,
-            if (com.nuvio.app.features.youtube.YouTubeHost.available) FloatingNavigationItem(
-                selected = selectedTab == AppScreenTab.Music,
-                onClick = { onTabSelected(AppScreenTab.Music) },
-                icon = Icons.Filled.MusicNote,
-                label = stringResource(Res.string.compose_nav_music),
-            ) else null,
             FloatingNavigationItem(
                 selected = selectedTab == AppScreenTab.Settings,
                 onClick = { onTabSelected(AppScreenTab.Settings) },
@@ -159,7 +145,7 @@ internal fun MainTabsDestination(
             containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets(0),
             bottomBar = {
-                if (!isTabletLayout && !useNativeBottomTabs && navBarStyleSetting == NavBarStyle.CLASSIC && !hideMusicPlayerNavBar) {
+                if (!isTabletLayout && !useNativeBottomTabs && navBarStyleSetting == NavBarStyle.CLASSIC) {
                     NuvioClassicNavigationBar {
                         NavItem(
                             selected = selectedTab == AppScreenTab.Home,
@@ -195,14 +181,6 @@ internal fun MainTabsDestination(
                                 contentDescription = liveTvLabel,
                             )
                         }
-                        if (com.nuvio.app.features.youtube.YouTubeHost.available) {
-                            NavItem(
-                                selected = selectedTab == AppScreenTab.Music,
-                                onClick = { onTabSelected(AppScreenTab.Music) },
-                                icon = Icons.Filled.MusicNote,
-                                contentDescription = stringResource(Res.string.compose_nav_music),
-                            )
-                        }
                         NavItem(
                             selected = selectedTab == AppScreenTab.Settings,
                             onClick = { onTabSelected(AppScreenTab.Settings) },
@@ -220,7 +198,7 @@ internal fun MainTabsDestination(
         ) { innerPadding ->
             Box(modifier = Modifier.fillMaxSize()) {
                 CompositionLocalProvider(
-                    LocalNuvioBottomNavigationOverlayPadding provides if (hideMusicPlayerNavBar) 0.dp else bottomNavigationOverlayPadding,
+                    LocalNuvioBottomNavigationOverlayPadding provides bottomNavigationOverlayPadding,
                     LocalNuvioNavBarScrollState provides navBarScrollState,
                 ) {
                     AppTabHost(
@@ -236,7 +214,7 @@ internal fun MainTabsDestination(
                     )
                 }
 
-                if (isTabletLayout && !useNativeBottomTabs && !hideMusicPlayerNavBar) {
+                if (isTabletLayout && !useNativeBottomTabs) {
                     val tabletNavBarScrollState = remember { NuvioNavBarScrollState().apply { collapse() } }
                     FloatingNavigationBar(
                         modifier = Modifier.align(Alignment.TopCenter).widthIn(max = 416.dp),
@@ -252,7 +230,7 @@ internal fun MainTabsDestination(
                     )
                 }
 
-                if (!isTabletLayout && !useNativeBottomTabs && navBarStyleSetting != NavBarStyle.CLASSIC && !hideMusicPlayerNavBar) {
+                if (!isTabletLayout && !useNativeBottomTabs && navBarStyleSetting != NavBarStyle.CLASSIC) {
                     when (navBarStyleSetting) {
                         NavBarStyle.EXPANDED -> navBarScrollState.expand()
                         NavBarStyle.COMPACT -> navBarScrollState.collapse()

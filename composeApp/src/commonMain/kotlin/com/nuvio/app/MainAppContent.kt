@@ -488,7 +488,6 @@ internal fun MainAppContent(
             AppScreenTab.Library -> libraryScrollToTopRequests.tryEmit(Unit)
             AppScreenTab.YouTube -> Unit
             AppScreenTab.LiveTv -> liveTvScrollToTopRequests.tryEmit(Unit)
-            AppScreenTab.Music -> Unit
             AppScreenTab.Settings -> settingsRootActionRequests.tryEmit(Unit)
         }
     }

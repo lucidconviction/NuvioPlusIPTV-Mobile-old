@@ -2,7 +2,7 @@
 
 # Lucid Nuvio IPTV+ Mobile
 
-**Live TV, sports, movies, series, YouTube and a full music hub — in one Android app.**
+**Live TV, sports, movies, series and YouTube — in one Android app.**
 
 [![Latest release](https://img.shields.io/github/v/release/lucidconviction/lucid-nuvio-iptvplus-mobile?style=for-the-badge)](https://github.com/lucidconviction/lucid-nuvio-iptvplus-mobile/releases/latest)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=for-the-badge)](LICENSE)
@@ -18,11 +18,11 @@
 
 <div align="center">
 
-| Music | Live TV | Sports |
+| Live TV | Sports | YouTube |
 |:---:|:---:|:---:|
-| <img src="screenshots/music.jpg" width="240" alt="Music hub"> | <img src="screenshots/live-tv.jpg" width="240" alt="Live TV and channel groups"> | <img src="screenshots/sports.jpg" width="240" alt="Sports scores and live events"> |
-| **YouTube** | **Player** | **Video info** |
-| <img src="screenshots/youtube.jpg" width="240" alt="YouTube search and videos"> | <img src="screenshots/player.jpg" width="240" alt="Player with Info, More Videos and Comments"> | <img src="screenshots/youtube-info.jpg" width="240" alt="Video details panel"> |
+| <img src="screenshots/live-tv.jpg" width="240" alt="Live TV and channel groups"> | <img src="screenshots/sports.jpg" width="240" alt="Sports scores and live events"> | <img src="screenshots/youtube.jpg" width="240" alt="YouTube search and videos"> |
+| **Player** | **Video info** | |
+| <img src="screenshots/player.jpg" width="240" alt="Player with Info, More Videos and Comments"> | <img src="screenshots/youtube-info.jpg" width="240" alt="Video details panel"> | |
 
 </div>
 
@@ -45,14 +45,6 @@
 - Follow teams and leagues, with reminders and scoring alerts.
 - A Replays tab with highlights and event videos.
 - Pre-event and post-event videos on every game page.
-
-### 🎵 Music
-- Browse, search and discover songs, artists, albums and playlists.
-- Like songs, follow artists, build playlists and download for offline listening.
-- Music videos or audio-only playback, with synced lyrics.
-- Shuffle and repeat modes, a queue view and a full-screen player.
-- Crossfade into the next track over the last 20 seconds.
-- Player controls and the navigation bar step aside after five seconds and return on touch.
 
 ### ▶️ YouTube
 - Home, Subscriptions, History, Playlists, Channels, Live, Music, Gaming, News, Sports and Shorts.

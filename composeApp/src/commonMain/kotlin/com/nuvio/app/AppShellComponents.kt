@@ -230,10 +230,6 @@ internal fun AppTabHost(
                 )
             }
 
-            AppScreenTab.Music -> {
-                com.nuvio.app.features.music.ui.MusicScreen(modifier = Modifier.fillMaxSize())
-            }
-
             AppScreenTab.Settings -> {
                 SettingsScreen(
                     modifier = Modifier.fillMaxSize(),
