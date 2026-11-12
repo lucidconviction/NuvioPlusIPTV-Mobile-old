@@ -605,6 +605,7 @@ private fun PlayerScreenRuntime.RenderPlayerControls(
             modifier = modifier,
             foldLayout = folded,
             gestureController = gestureController,
+            showChapterTitle = showChapterTitle,
             onWake = {
                 controlsVisible = true
                 controlsActivityTick += 1
@@ -722,6 +723,8 @@ private fun PlayerScreenRuntime.RenderPlayerModals(displayedPositionMs: Long) {
         chapters = chapters,
         positionMs = displayedPositionMs,
         durationMs = playbackSnapshot.durationMs,
+        showChapterTitle = showChapterTitle,
+        onToggleChapterTitle = { showChapterTitle = !showChapterTitle },
         onChapterSelected = { selectChapter(it) },
         onDismiss = {
             showChaptersPanel = false

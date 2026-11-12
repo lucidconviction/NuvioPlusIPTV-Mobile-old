@@ -48,7 +48,9 @@ object HomeRepository {
     private var lastErrorMessage: String? = null
 
     fun refresh(addons: List<ManagedAddon>, force: Boolean = false) {
+        // Adult addons are hidden from Home by default; they still appear in addon settings.
         val activeAddons = addons.enabledAddons()
+            .filterNot { it.manifest?.behaviorHints?.adult == true }
         val requests = buildHomeCatalogDefinitions(activeAddons)
         currentDefinitions = requests
         val requestCacheKeys = requests.mapTo(mutableSetOf(), HomeCatalogDefinition::cacheKey)

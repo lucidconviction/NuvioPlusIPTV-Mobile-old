@@ -46,6 +46,8 @@ internal fun PlayerChaptersPanel(
     chapters: List<PlayerChapter>,
     positionMs: Long,
     durationMs: Long,
+    showChapterTitle: Boolean,
+    onToggleChapterTitle: () -> Unit,
     onChapterSelected: (Int) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
@@ -70,6 +72,11 @@ internal fun PlayerChaptersPanel(
             PlayerPanelHeader(
                 title = stringResource(Res.string.compose_player_panel_chapters, chapters.size),
             ) {
+                PlayerDialogButton(
+                    label = if (showChapterTitle) "Titles on" else "Titles off",
+                    onClick = onToggleChapterTitle,
+                )
+                Spacer(Modifier.width(8.dp))
                 PlayerDialogButton(
                     label = stringResource(Res.string.action_close),
                     onClick = onDismiss,

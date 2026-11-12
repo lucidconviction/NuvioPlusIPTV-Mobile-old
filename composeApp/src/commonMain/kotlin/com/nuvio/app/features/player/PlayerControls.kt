@@ -140,6 +140,7 @@ internal fun PlayerControlsShell(
     foldLayout: Boolean = false,
     gestureController: PlayerGestureController? = null,
     onWake: () -> Unit = {},
+    showChapterTitle: Boolean = true,
     /** Reports the height of the title/progress/actions block, so floating rows can sit above it. */
     onTimelineHeightChanged: (Dp) -> Unit = {},
 ) {
@@ -329,6 +330,7 @@ internal fun PlayerControlsShell(
                     onEpisodesClick = onEpisodesClick,
                     chapters = chapters,
                     onChaptersClick = onChaptersClick,
+                    showChapterTitle = showChapterTitle,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
@@ -361,7 +363,9 @@ internal fun PlayerControlsShell(
                             badges = badges,
                         )
                     }
-                    PlayerChapterTitle(chapters = chapters, positionMs = displayedPositionMs)
+                    if (showChapterTitle) {
+                        PlayerChapterTitle(chapters = chapters, positionMs = displayedPositionMs)
+                    }
                     PlayerTimeline(
                         snapshot = playbackSnapshot,
                         displayedPositionMs = displayedPositionMs,
@@ -721,6 +725,7 @@ private fun ProgressControls(
     onEpisodesClick: (() -> Unit)? = null,
     chapters: List<PlayerChapter> = emptyList(),
     onChaptersClick: (() -> Unit)? = null,
+    showChapterTitle: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val aspectRatioPainter = appIconPainter(AppIconResource.PlayerAspectRatio)
@@ -730,11 +735,13 @@ private fun ProgressControls(
     val episodesPainter = appIconPainter(AppIconResource.PlayerEpisodes)
 
     Column(modifier = modifier) {
-        PlayerChapterTitle(
-            chapters = chapters,
-            positionMs = displayedPositionMs,
-            modifier = Modifier.padding(horizontal = 14.dp),
-        )
+        if (showChapterTitle) {
+            PlayerChapterTitle(
+                chapters = chapters,
+                positionMs = displayedPositionMs,
+                modifier = Modifier.padding(horizontal = 14.dp),
+            )
+        }
         PlayerSeekBar(
             durationMs = playbackSnapshot.durationMs,
             displayedPositionMs = displayedPositionMs,
