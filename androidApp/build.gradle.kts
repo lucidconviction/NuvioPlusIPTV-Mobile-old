@@ -51,6 +51,8 @@ val releaseAppVersionCode = providers.gradleProperty("nuvio.app.versionCode").or
     ?: error("CURRENT_PROJECT_VERSION is missing or invalid in ${appVersionConfigFile.path}")
 // Test builds (-Pnuvio.app.testBuild=true) install as their own app next to the real one.
 val isTestBuild = providers.gradleProperty("nuvio.app.testBuild").orNull == "true"
+// Set -Pnuvio.android.universal=true to also build a single APK for every ABI (used for Downloader).
+val buildUniversalApk = providers.gradleProperty("nuvio.android.universal").orNull == "true"
 val requestedTaskNames = gradle.startParameter.taskNames.map { it.substringAfterLast(':') }
 val buildsReleaseApks = requestedTaskNames.any {
     it.startsWith("assemble", ignoreCase = true) && it.endsWith("Release", ignoreCase = true)
@@ -128,7 +130,7 @@ android {
             isEnable = buildsReleaseApks
             reset()
             include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-            isUniversalApk = false
+            isUniversalApk = buildUniversalApk
         }
     }
 
