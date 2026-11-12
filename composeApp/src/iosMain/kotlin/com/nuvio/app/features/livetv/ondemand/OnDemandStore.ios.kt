@@ -45,6 +45,17 @@ internal actual object OnDemandStore {
             .take(limit)
     }
 
+    actual fun searchFuzzy(kind: VodKind, text: String, excludeCategories: Set<String>, limit: Int): List<VodItem> {
+        val q = text.trim()
+        if (q.length < 3) return emptyList()
+        return items.values.asSequence()
+            .filter { it.kind == kind && com.nuvio.app.core.text.FuzzyTextSearch.matches(it.name, q) }
+            .filter { "${it.kind.key}:${it.playlistId}:${it.categoryId}" !in excludeCategories }
+            .distinctBy { "${it.name.lowercase()}|${it.year}" }
+            .take(limit)
+            .toList()
+    }
+
     actual fun byTmdb(kind: VodKind, tmdbId: String): List<VodItem> =
         items.values.filter { it.kind == kind && it.tmdbId == tmdbId }
 

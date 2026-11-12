@@ -172,10 +172,13 @@ internal object LiveTvViewState {
         )
     }
 
-    /** Channels whose name or number matches [query], from the visible list. */
+    /** Channels whose name or number matches [query], with a little tolerance for typos. */
     fun search(visible: List<LiveChannel>, query: String): List<LiveChannel> {
         val q = query.trim()
         if (q.isEmpty()) return emptyList()
-        return visible.filter { it.name.contains(q, ignoreCase = true) || it.number.toString() == q }
+        return visible.filter {
+            it.number.toString() == q ||
+                com.nuvio.app.core.text.FuzzyTextSearch.matches(it.name, q)
+        }
     }
 }

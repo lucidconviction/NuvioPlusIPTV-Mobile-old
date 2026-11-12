@@ -535,6 +535,8 @@
     <string name="compose_settings_root_appearance_description">Home, streams, collections, and detail pages</string>
     <string name="compose_settings_root_check_updates_description">Download latest release</string>
     <string name="compose_settings_root_check_updates_title">Check for updates</string>
+    <string name="compose_settings_whats_new_title">What\'s new</string>
+    <string name="compose_settings_whats_new_description">Release notes and the changelog for every version.</string>
     <string name="compose_settings_root_content_discovery_description">Manage addons and discovery sources.</string>
     <string name="compose_settings_root_content_discovery_description_appstore">Manage addons and choose what appears in Nuvio.</string>
     <string name="compose_settings_root_downloads_description">Manage your downloaded movies and episodes.</string>

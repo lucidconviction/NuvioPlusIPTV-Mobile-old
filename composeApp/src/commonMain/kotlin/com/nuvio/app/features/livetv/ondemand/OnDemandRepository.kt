@@ -238,7 +238,14 @@ internal object OnDemandRepository {
 
     suspend fun search(kind: VodKind, text: String, hidden: Set<String>, limit: Int = 200, sort: VodSort = VodSort.DEFAULT, merge: Boolean = true): List<VodItem> =
         withContext(Dispatchers.Default) {
-            runCatching { OnDemandStore.search(kind, text, hidden, limit, sort, merge) }.getOrDefault(emptyList())
+            runCatching {
+                val exact = OnDemandStore.search(kind, text, hidden, limit, sort, merge)
+                if (exact.isNotEmpty() || text.trim().length < 3) {
+                    exact
+                } else {
+                    OnDemandStore.searchFuzzy(kind, text, hidden, limit)
+                }
+            }.getOrDefault(emptyList())
         }
 
     /** One version of a title you can pick: where it's from and what it is. */

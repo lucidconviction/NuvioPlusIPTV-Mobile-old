@@ -26,12 +26,16 @@ import nuvio.composeapp.generated.resources.compose_settings_page_supporters_con
 import nuvio.composeapp.generated.resources.compose_settings_root_about_section
 import nuvio.composeapp.generated.resources.compose_settings_root_check_updates_description
 import nuvio.composeapp.generated.resources.compose_settings_root_check_updates_title
+import nuvio.composeapp.generated.resources.compose_settings_whats_new_description
+import nuvio.composeapp.generated.resources.compose_settings_whats_new_title
 import nuvio.composeapp.generated.resources.compose_settings_root_privacy_policy_description
 import nuvio.composeapp.generated.resources.updates_debug_test_description
 import nuvio.composeapp.generated.resources.updates_debug_test_title
 import org.jetbrains.compose.resources.stringResource
 
 private const val PRIVACY_POLICY_URL = "https://nuvio.tv/privacy-policy"
+private const val CHANGELOG_URL =
+    "https://github.com/lucidconviction/lucid-nuvio-iptvplus-mobile/releases"
 
 internal fun LazyListScope.aboutSettingsContent(
     isTablet: Boolean,
@@ -72,6 +76,14 @@ internal fun LazyListScope.aboutSettingsContent(
                     icon = SettingsPage.LicensesAttributions.icon,
                     isTablet = isTablet,
                     onClick = onLicensesAttributionsClick,
+                )
+                SettingsGroupDivider(isTablet = isTablet)
+                SettingsNavigationRow(
+                    title = stringResource(Res.string.compose_settings_whats_new_title),
+                    description = stringResource(Res.string.compose_settings_whats_new_description),
+                    icon = SettingsPage.LicensesAttributions.icon,
+                    isTablet = isTablet,
+                    onClick = { uriHandler.openUri(CHANGELOG_URL) },
                 )
                 if (onCheckForUpdatesClick != null) {
                     SettingsGroupDivider(isTablet = isTablet)

@@ -236,6 +236,22 @@ internal actual object OnDemandStore {
         return result.filter { "${it.kind.key}:${it.playlistId}:${it.categoryId}" !in excludeCategories }
     }
 
+    actual fun searchFuzzy(kind: VodKind, text: String, excludeCategories: Set<String>, limit: Int): List<VodItem> {
+        val q = text.trim()
+        if (q.length < 3) return emptyList()
+        return runCatching {
+            query(
+                "SELECT * FROM items WHERE kind = ? ORDER BY length(name) LIMIT 25000",
+                listOf(kind.key),
+            ).asSequence()
+                .filter { com.nuvio.app.core.text.FuzzyTextSearch.matches(it.name, q) }
+                .filter { "${it.kind.key}:${it.playlistId}:${it.categoryId}" !in excludeCategories }
+                .distinctBy { "${it.name.lowercase()}|${it.year}" }
+                .take(limit)
+                .toList()
+        }.getOrDefault(emptyList())
+    }
+
     actual fun byTmdb(kind: VodKind, tmdbId: String): List<VodItem> =
         query("SELECT * FROM items WHERE kind = ? AND tmdb = ?", arrayListOf(kind.key, tmdbId))
 
