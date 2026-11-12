@@ -37,6 +37,9 @@
 - Favourites, hidden groups, channel reordering and custom channel logos.
 - Catch-up, reminders and recordings.
 - Quick Channels for fast switching without leaving the player.
+- Search that tolerates typos in channel names and On Demand titles.
+- Top 10 and “Because you watched” rows on Home when a matching catalog is available.
+- Catalogs marked as adult are hidden from Home by default.
 - Channels access for every Live TV source, including catch-up and recordings.
 - Multi-view for watching more than one channel at once.
 
@@ -52,6 +55,11 @@
 - Info, More Videos and Comments panels on the player.
 - Auto-play the next video when one finishes.
 - YouTube videos in Continue Watching.
+
+### 🎞️ Player
+- Chapter markers, a chapter list and a Titles on/off toggle.
+- Startup progress steps while the app is loading.
+- Gesture controls, subtitles, in-app PiP and Multi-view.
 
 ### 🎬 Movies, series and more
 - On Demand with categories, search, sorting and quality tags.
