@@ -235,6 +235,8 @@ internal class PlayerScreenRuntime(
     var nextEpisodePreloadTriggered by mutableStateOf(false)
     /** Streams lookup for an add-on catalog item selected inside the channel panel. */
     var addonCatalogPlayJob by mutableStateOf<Job?>(null)
+    /** A Lucid TV channel being tuned in inside the player; the last pick wins. */
+    var virtualSwitchJob by mutableStateOf<Job?>(null)
     var pendingP2pSwitch by mutableStateOf<PendingPlayerP2pSwitch?>(null)
     var credentialRefreshJob by mutableStateOf<Job?>(null)
     var credentialRefreshAttemptedSourceUrl by mutableStateOf<String?>(null)

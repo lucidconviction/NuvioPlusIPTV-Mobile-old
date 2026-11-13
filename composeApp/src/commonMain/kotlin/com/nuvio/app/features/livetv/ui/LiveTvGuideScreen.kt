@@ -139,20 +139,35 @@ fun LiveTvGuideScreen(
             val n = allSections.count { it.group.sourceId == p.id }
             if (n > 0) PlaylistChoice(p.id, p.name, if (n == 1) "1 group" else "$n groups") else null
         }
+        val lucidChoice = allSections
+            .firstOrNull { it.group.sourceId == com.nuvio.app.features.livetv.virtual.VirtualChannels.SOURCE_ID }
+            ?.let { PlaylistChoice(com.nuvio.app.features.livetv.virtual.VirtualChannels.SOURCE_ID, "Lucid TV", "1 group") }
         val addonChoices = addons.filter { it.manifest != null && it.manifest!!.catalogs.isNotEmpty() }.map { addon ->
             val manifest = addon.manifest!!
-            PlaylistChoice("addon:${addon.manifestUrl}", manifest.name, "${manifest.catalogs.size} catalog${if (manifest.catalogs.size != 1) "s" else ""}")
+            PlaylistChoice("addon:${addon.manifestUrl}", "Add-on · ${manifest.name}", "${manifest.catalogs.size} catalog${if (manifest.catalogs.size != 1) "s" else ""}")
         }
-        baseChoices + addonChoices
+        baseChoices + listOfNotNull(lucidChoice) + addonChoices
     }
     val playlistId = PlaylistFilter.effective(savedPlaylist, playlistChoices.map { it.id })
-    val sections = if (playlistId == null) allSections else if (playlistId.startsWith("addon:")) allSections else allSections.filter { it.group.sourceId == null || it.group.sourceId == playlistId }
+    val sections = when {
+        playlistId == null -> allSections
+        playlistId.startsWith("addon:") -> allSections
+        playlistId == com.nuvio.app.features.livetv.virtual.VirtualChannels.SOURCE_ID ->
+            allSections.filter { it.group.sourceId == com.nuvio.app.features.livetv.virtual.VirtualChannels.SOURCE_ID }
+        else -> allSections.filter { it.group.sourceId == null || it.group.sourceId == playlistId }
+    }
     // Saved, so backing out of a channel returns to the same group and spot in the guide.
     var selectedGroupId by rememberSaveable { mutableStateOf<String?>(null) }
     val selected = sections.firstOrNull { it.group.id == selectedGroupId } ?: sections.firstOrNull()
     var searching by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
-    val playlistChannels = state.visible.filter { playlistId == null || it.sourceId == playlistId }
+    val playlistChannels = when {
+        playlistId == null -> state.visible
+        playlistId.startsWith("addon:") -> state.visible
+        playlistId == com.nuvio.app.features.livetv.virtual.VirtualChannels.SOURCE_ID ->
+            state.visible.filter { it.sourceId == com.nuvio.app.features.livetv.virtual.VirtualChannels.SOURCE_ID }
+        else -> state.visible.filter { it.sourceId == playlistId }
+    }
     val channels = when {
         searching && query.isNotBlank() -> remember(playlistChannels, query) { LiveTvViewState.search(playlistChannels, query) }
         selectedGroupId == ChannelGroup.ALL -> playlistChannels

@@ -75,6 +75,8 @@ internal object LiveTvCatchup {
         now: Long,
         offsetMs: Long = 0L,
     ): CatchupPlan? {
+        // Lucid TV channels have no provider archive; their item is resolved when tuning.
+        if (com.nuvio.app.features.livetv.virtual.VirtualChannels.isVirtualKey(channel.key)) return null
         val catchup = channel.catchup ?: return null
         if (!CatchupUrlBuilder.isAvailable(catchup, program.startMs, now)) return null
         val shift = shiftMs(settings)

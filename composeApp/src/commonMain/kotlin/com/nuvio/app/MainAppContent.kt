@@ -148,6 +148,8 @@ import com.nuvio.app.features.player.ExternalPlayerPlatform
 import com.nuvio.app.features.livetv.model.EpgProgram
 import com.nuvio.app.features.livetv.model.LiveChannel
 import com.nuvio.app.features.livetv.player.LiveTvPlayback
+import com.nuvio.app.features.livetv.player.VirtualChannelPlayback
+import com.nuvio.app.features.livetv.virtual.VirtualChannels
 import com.nuvio.app.features.livetv.ui.LiveTvCloudSyncPrompts
 import com.nuvio.app.features.livetv.ui.LiveTvGuideScreen
 import com.nuvio.app.features.livetv.ui.OnDemandActions
@@ -155,6 +157,8 @@ import com.nuvio.app.features.livetv.ui.OnDemandScreen
 import com.nuvio.app.features.livetv.ui.OnDemandSeeAllScreen
 import com.nuvio.app.features.livetv.ui.RecordingsScreen
 import com.nuvio.app.features.livetv.ui.LiveTvManageScreen
+import com.nuvio.app.features.livetv.ui.virtual.VirtualChannelEditorScreen
+import com.nuvio.app.features.livetv.ui.virtual.VirtualChannelsScreen
 import com.nuvio.app.features.livetv.ui.multiview.LiveTvMultiViewScreen
 import com.nuvio.app.features.livetv.ui.multiview.MultiViewQuickNavBadge
 import com.nuvio.app.features.livetv.ui.multiview.MultiViewRepository
@@ -433,6 +437,7 @@ internal fun MainAppContent(
     val liveTvRecordingsTitle = stringResource(Res.string.livetv_recordings)
     val liveTvSportsTitle = stringResource(Res.string.livetv_sports)
     val liveTvChannelGone = stringResource(Res.string.livetv_channel_gone)
+    val lucidTvChannelOffline = stringResource(Res.string.lucid_tv_channel_offline)
     val liveTvManageTitle = stringResource(Res.string.livetv_manage)
     val isRemoteLibrarySource = libraryUiState.sourceMode != LibrarySourceMode.LOCAL
     val appContentGeneration = if (ownsAppRuntime && appGateController != null) {
@@ -941,6 +946,18 @@ internal fun MainAppContent(
         }
 
         fun openLiveChannel(channel: LiveChannel, nowTitle: String?) {
+            if (VirtualChannels.isVirtualKey(channel.key)) {
+                coroutineScope.launch {
+                    NuvioToastController.show("Tuning ${channel.name}…")
+                    val launchId = VirtualChannelPlayback.prepare(channel, activePlaybackProfileId)
+                    if (launchId == null) {
+                        NuvioToastController.show(lucidTvChannelOffline)
+                        return@launch
+                    }
+                    navController.navigate(PlayerRoute(launchId = launchId, title = channel.name))
+                }
+                return
+            }
             val launchId = LiveTvPlayback.prepare(channel, activePlaybackProfileId, nowTitle)
             navController.navigate(PlayerRoute(launchId = launchId, title = channel.name))
         }
@@ -1274,6 +1291,39 @@ internal fun MainAppContent(
          * Sends a channel from the Live TV list straight to the open Multi-view page.
          */
         fun addLiveChannelToMultiView(channel: LiveChannel) {
+            if (VirtualChannels.isVirtualKey(channel.key)) {
+                coroutineScope.launch {
+                    val resolved = VirtualChannelPlayback.resolve(channel, activePlaybackProfileId)
+                    if (resolved == null) {
+                        NuvioToastController.show(lucidTvChannelOffline)
+                        return@launch
+                    }
+                    val added = MultiViewRepository.add(
+                        MultiViewStream(
+                            id = channel.key,
+                            url = resolved.launch.sourceUrl,
+                            title = channel.name,
+                            subtitle = resolved.tune.title,
+                            logo = channel.logo,
+                            headers = resolved.launch.sourceHeaders,
+                            responseHeaders = resolved.launch.sourceResponseHeaders,
+                            streamType = resolved.launch.streamType,
+                            providerName = channel.sourceName,
+                            streamTitle = channel.name,
+                            parentMetaId = channel.key,
+                            parentMetaType = LiveTvPlayback.CONTENT_TYPE,
+                            videoId = channel.key,
+                        ),
+                    )
+                    NuvioToastController.show(
+                        if (added) "Added ${channel.name} to Multi-view"
+                        else if (MultiViewRepository.streams.value.size >= MultiViewRepository.maxStreams.value) {
+                            "Multi-view is full (${MultiViewRepository.maxStreams.value} windows)"
+                        } else "Already open in Multi-view",
+                    )
+                }
+                return
+            }
             val added = MultiViewRepository.addChannel(channel)
             NuvioToastController.show(
                 if (added) {
@@ -1844,6 +1894,20 @@ internal fun MainAppContent(
                                 onLiveTvMultiViewClick = { navController.navigate(LiveTvMultiViewRoute()) { launchSingleTop = true } },
                                 onLiveTvAddChannelToMultiView = ::addLiveChannelToMultiView,
                                 onLiveTvManageClick = { navController.navigate(LiveTvManageRoute(liveTvManageTitle)) },
+                                onLiveTvVirtualChannelsClick = { navController.navigate(LiveTvVirtualChannelsRoute("Lucid TV")) { launchSingleTop = true } },
+                                onLiveTvMakeVirtualChannel = { addon, catalog ->
+                                    navController.navigate(
+                                        LiveTvVirtualChannelEditorRoute(
+                                            manifestUrl = addon.manifestUrl,
+                                            addonId = addon.manifest?.id,
+                                            addonName = addon.displayTitle,
+                                            catalogId = catalog.id,
+                                            catalogName = catalog.name,
+                                            contentType = catalog.type,
+                                            title = "Lucid TV",
+                                        )
+                                    ) { launchSingleTop = true }
+                                },
                                 onLiveTvOpenAddonCatalog = openAddonCatalogAction,
                                 onLiveTvPlayAddonItem = ::openLiveTvAddonItem,
                                 onLiveTvAddonItemToMultiView = ::addLiveTvAddonItemToMultiView,
@@ -2020,6 +2084,34 @@ internal fun MainAppContent(
                 entry<LiveTvManageRoute> { route ->
                     val onBack = rememberGuardedPopBackStack(navController, route)
                     LiveTvManageScreen(onBack = onBack, modifier = Modifier.fillMaxSize())
+                }
+                entry<LiveTvVirtualChannelsRoute> { route ->
+                    val onBack = rememberGuardedPopBackStack(navController, route)
+                    VirtualChannelsScreen(
+                        onBack = onBack,
+                        onAddChannel = {
+                            navController.navigate(LiveTvVirtualChannelEditorRoute(title = "Lucid TV")) { launchSingleTop = true }
+                        },
+                        onEditChannel = { id ->
+                            navController.navigate(LiveTvVirtualChannelEditorRoute(channelId = id, title = "Lucid TV")) { launchSingleTop = true }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                entry<LiveTvVirtualChannelEditorRoute> { route ->
+                    val onBack = rememberGuardedPopBackStack(navController, route)
+                    VirtualChannelEditorScreen(
+                        channelId = route.channelId,
+                        prefillManifestUrl = route.manifestUrl,
+                        prefillAddonId = route.addonId,
+                        prefillAddonName = route.addonName,
+                        prefillCatalogId = route.catalogId,
+                        prefillCatalogName = route.catalogName,
+                        prefillContentType = route.contentType,
+                        prefillGenre = route.genre,
+                        onBack = onBack,
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 }
                 entry<LiveTvMultiViewRoute> { route ->
                     val onBack = rememberGuardedPopBackStack(navController, route)

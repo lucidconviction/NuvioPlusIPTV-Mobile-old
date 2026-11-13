@@ -224,6 +224,10 @@ fun LiveTvScreen(
     onAddonItemToMultiView: (MetaPreview) -> Unit = {},
     /** Opens the add-on settings / manage screen. */
     onOpenAddonSettings: () -> Unit = {},
+    /** Opens Lucid TV, the virtual channel studio. */
+    onOpenVirtualChannels: () -> Unit = {},
+    /** Turns an inline add-on catalog into a Lucid TV channel. */
+    onMakeVirtualChannel: (com.nuvio.app.features.addons.ManagedAddon, com.nuvio.app.features.addons.AddonCatalog) -> Unit = { _, _ -> },
 ) {
     val tokens = MaterialTheme.nuvio
     // Restore the open groups and the scroll position when coming back from the player.
@@ -245,6 +249,8 @@ fun LiveTvScreen(
     var manualRecording by remember { mutableStateOf<Pair<LiveChannel, Boolean>?>(null) }
     val sportsSettings by remember { SportsRepository.start(); SportsRepository.settings }.collectAsStateWithLifecycle()
     val sportsOn = sportsSettings.showInSidebar
+    val addonUiState by AddonRepository.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { runCatching { AddonRepository.initialize() } }
     val state by remember {
         LiveTvRepository.ensureLoaded()
         LiveTvViewState.list
@@ -282,22 +288,50 @@ fun LiveTvScreen(
         }
     }
 
-    // Playlist dropdown: only playlists that have groups here; hidden with fewer than two.
-    val playlistChoices = remember(state.sections, playlists) {
-        playlists.mapNotNull { p ->
+    // Playlist, Lucid TV and add-on sources: every source the list can be narrowed to.
+    val playlistChoices = remember(state.sections, playlists, addonUiState) {
+        val bases = playlists.mapNotNull { p ->
             val n = state.sections.count { it.group.sourceId == p.id }
             if (n > 0) PlaylistChoice(p.id, p.name, if (n == 1) "1 group" else "$n groups") else null
         }
+        val lucid = state.sections
+            .firstOrNull { it.group.sourceId == com.nuvio.app.features.livetv.virtual.VirtualChannels.SOURCE_ID }
+            ?.let { PlaylistChoice(com.nuvio.app.features.livetv.virtual.VirtualChannels.SOURCE_ID, "Lucid TV", "1 group") }
+        val addons = addonUiState.addons
+            .filter { it.enabled && it.manifest?.catalogs?.isNotEmpty() == true }
+            .map { addon ->
+                val count = addon.manifest?.catalogs?.size ?: 0
+                PlaylistChoice(
+                    id = "addon:${addon.manifestUrl}",
+                    name = "Add-on · ${addon.displayTitle}",
+                    detail = if (count == 1) "1 catalog" else "$count catalogs",
+                )
+            }
+        bases + listOfNotNull(lucid) + addons
     }
     val playlistId = PlaylistFilter.effective(savedPlaylist, playlistChoices.map { it.id })
     val playlistNames = remember(playlists) { playlists.associate { it.id to it.name } }
     val sections = remember(state.sections, playlistId) {
-        if (playlistId == null) state.sections
-        else state.sections.filter { it.group.sourceId == null || it.group.sourceId == playlistId }
+        when {
+            playlistId == null -> state.sections
+            playlistId.startsWith("addon:") -> emptyList()
+            playlistId == com.nuvio.app.features.livetv.virtual.VirtualChannels.SOURCE_ID ->
+                state.sections.filter { it.group.sourceId == com.nuvio.app.features.livetv.virtual.VirtualChannels.SOURCE_ID }
+            else -> state.sections.filter { it.group.sourceId == null || it.group.sourceId == playlistId }
+        }
     }
 
     val searchResults by remember(state.visible, query, playlistId) {
-        derivedStateOf { LiveTvViewState.search(state.visible.filter { playlistId == null || it.sourceId == playlistId }, query) }
+        derivedStateOf {
+            val pool = when {
+                playlistId == null -> state.visible
+                playlistId.startsWith("addon:") -> emptyList()
+                playlistId == com.nuvio.app.features.livetv.virtual.VirtualChannels.SOURCE_ID ->
+                    state.visible.filter { it.sourceId == com.nuvio.app.features.livetv.virtual.VirtualChannels.SOURCE_ID }
+                else -> state.visible.filter { it.sourceId == playlistId }
+            }
+            LiveTvViewState.search(pool, query)
+        }
     }
     val nowNext: Map<String, NowNext> = remember(programs, now) {
         LiveTvRepository.nowNext(programs.keys, now)
@@ -332,23 +366,32 @@ fun LiveTvScreen(
         return null
     }
 
-    // Build combined list structure: sections with addons inserted after "Recently watched"
+    // Build combined list structure: All Groups, Lucid TV, add-ons, then the rest.
     val addonsKey = "addons"
-    val combinedSections = remember(sections) {
-        sections.map { section ->
+    val onlyAddonManifest = playlistId
+        ?.takeIf { it.startsWith("addon:") }
+        ?.removePrefix("addon:")
+    val showAddons = playlistId == null || onlyAddonManifest != null
+    val combinedSections = remember(sections, playlistId) {
+        val base = sections.map { section ->
             CombinedSection(
                 group = section.group,
                 channels = section.channels,
                 isAddonsSection = false,
             )
-        }.let { list ->
-            val allIndex = list.indexOfFirst { it.group.id == ChannelGroup.ALL }
-            if (allIndex >= 0) {
-                list.subList(0, allIndex + 1) +
-                listOf(CombinedSection(group = ChannelGroup("", "", 0), channels = emptyList(), isAddonsSection = true)) +
-                list.subList(allIndex + 1, list.size)
+        }
+        if (!showAddons) {
+            base
+        } else {
+            val addonsSection = CombinedSection(group = ChannelGroup("", "", 0), channels = emptyList(), isAddonsSection = true)
+            val afterLucid = base.indexOfFirst {
+                it.group.sourceId == com.nuvio.app.features.livetv.virtual.VirtualChannels.SOURCE_ID
+            }
+            val insertAt = if (afterLucid >= 0) afterLucid else base.indexOfFirst { it.group.id == ChannelGroup.ALL }
+            if (insertAt >= 0) {
+                base.subList(0, insertAt + 1) + addonsSection + base.subList(insertAt + 1, base.size)
             } else {
-                list + listOf(CombinedSection(group = ChannelGroup("", "", 0), channels = emptyList(), isAddonsSection = true))
+                listOf(addonsSection) + base
             }
         }
     }
@@ -371,11 +414,12 @@ fun LiveTvScreen(
                     NuvioScreenHeader(
                         title = stringResource(Res.string.livetv_title),
                         actions = {
-                            if (state.hasSources) {
-                                IconButton(onClick = { overflow = true }) {
-                                    Icon(Icons.Filled.MoreVert, contentDescription = null, tint = tokens.colors.textPrimary)
-                                }
-                                Menu(expanded = overflow, onDismissRequest = { overflow = false }) {
+                            IconButton(onClick = { overflow = true }) {
+                                Icon(Icons.Filled.MoreVert, contentDescription = null, tint = tokens.colors.textPrimary)
+                            }
+                            Menu(expanded = overflow, onDismissRequest = { overflow = false }) {
+                                MenuItem(text = "Lucid TV channels", onClick = { overflow = false; onOpenVirtualChannels() })
+                                if (state.hasSources) {
                                     MenuItem(text = stringResource(Res.string.livetv_manage_menu), onClick = { overflow = false; onOpenManage() })
                                     MenuItem(text = stringResource(Res.string.livetv_update_now), onClick = { overflow = false; LiveTvRepository.refreshAll(force = true) })
                                     MenuItem(
@@ -486,6 +530,8 @@ fun LiveTvScreen(
                                 onOpenSettings = { onOpenAddonSettings() },
                                 onPlayItem = onPlayAddonItem,
                                 onAddToMultiView = onAddonItemToMultiView,
+                                onMakeChannel = onMakeVirtualChannel,
+                                onlyManifestUrl = onlyAddonManifest,
                             )
                         }
                     } else {
@@ -559,13 +605,15 @@ fun LiveTvScreen(
                 ?.takeIf { LiveTvCatchup.canWatchFromStart(channel, it, now) }
                 ?.let { program -> { onPlayCatchup(channel, program) } },
             extraRows = { close ->
-                val active = recordings.firstOrNull { it.channelKey == channel.key && it.isRecording }
-                if (active != null) {
-                    NuvioBottomSheetActionRow(title = stringResource(Res.string.livetv_rec_stop), icon = Icons.Filled.Stop, onClick = { close { LiveTvRecorder.stop(active.id) } })
-                } else {
-                    NuvioBottomSheetActionRow(title = stringResource(Res.string.livetv_rec_record_now), icon = Icons.Filled.FiberManualRecord, onClick = { close { manualRecording = channel to false } })
+                if (!com.nuvio.app.features.livetv.virtual.VirtualChannels.isVirtualKey(channel.key)) {
+                    val active = recordings.firstOrNull { it.channelKey == channel.key && it.isRecording }
+                    if (active != null) {
+                        NuvioBottomSheetActionRow(title = stringResource(Res.string.livetv_rec_stop), icon = Icons.Filled.Stop, onClick = { close { LiveTvRecorder.stop(active.id) } })
+                    } else {
+                        NuvioBottomSheetActionRow(title = stringResource(Res.string.livetv_rec_record_now), icon = Icons.Filled.FiberManualRecord, onClick = { close { manualRecording = channel to false } })
+                    }
+                    NuvioBottomSheetActionRow(title = stringResource(Res.string.livetv_rec_schedule), icon = Icons.Filled.Schedule, onClick = { close { manualRecording = channel to true } })
                 }
-                NuvioBottomSheetActionRow(title = stringResource(Res.string.livetv_rec_schedule), icon = Icons.Filled.Schedule, onClick = { close { manualRecording = channel to true } })
             },
         )
     }
@@ -964,6 +1012,8 @@ private fun AddonsCatalogInlineSection(
     onOpenSettings: () -> Unit,
     onPlayItem: (MetaPreview) -> Unit,
     onAddToMultiView: (MetaPreview) -> Unit,
+    onMakeChannel: (com.nuvio.app.features.addons.ManagedAddon, com.nuvio.app.features.addons.AddonCatalog) -> Unit,
+    onlyManifestUrl: String? = null,
 ) {
     val tokens = MaterialTheme.nuvio.colors
     // Lazy-load addons only when this section enters the composition (user scrolls here).
@@ -974,6 +1024,7 @@ private fun AddonsCatalogInlineSection(
 
     val uiState by AddonRepository.uiState.collectAsStateWithLifecycle()
     val addons = uiState.addons.liveTvAddons()
+        .let { list -> if (onlyManifestUrl == null) list else list.filter { it.manifestUrl == onlyManifestUrl } }
 
     Column(verticalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s4)) {
         if (addons.isEmpty()) {
@@ -1009,6 +1060,7 @@ private fun AddonsCatalogInlineSection(
                                 onToggle = { expandedCatalogs[catalogKey] = !isCatExpanded },
                                 onPlayItem = onPlayItem,
                                 onAddToMultiView = onAddToMultiView,
+                                onMakeChannel = { onMakeChannel(addon, catalog) },
                             )
                         }
                     }
@@ -1170,6 +1222,7 @@ private fun CatalogCard(
     errorMessage: String?,
     itemCount: Int,
     onToggle: () -> Unit,
+    onMakeChannel: () -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio.colors
     val arrow by animateFloatAsState(if (expanded) 180f else 0f)
@@ -1225,6 +1278,14 @@ private fun CatalogCard(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        IconButton(onClick = onMakeChannel) {
+            Icon(
+                Icons.Filled.Tv,
+                contentDescription = "Make Lucid TV channel",
+                tint = tokens.accent,
+                modifier = Modifier.size(20.dp),
+            )
+        }
         Icon(
             Icons.Filled.ExpandMore,
             contentDescription = null,
@@ -1244,6 +1305,7 @@ private fun ExpandableCatalogSection(
     onToggle: () -> Unit,
     onPlayItem: (MetaPreview) -> Unit,
     onAddToMultiView: (MetaPreview) -> Unit,
+    onMakeChannel: () -> Unit,
 ) {
     val catalogState = remember { mutableStateOf(CatalogUiState()) }
 
@@ -1283,6 +1345,7 @@ private fun ExpandableCatalogSection(
         errorMessage = catalogState.value.errorMessage,
         itemCount = catalogState.value.items.size,
         onToggle = onToggle,
+        onMakeChannel = onMakeChannel,
     )
 
     if (expanded) {

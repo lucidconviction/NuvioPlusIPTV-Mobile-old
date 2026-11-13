@@ -222,8 +222,44 @@ class YouTubePlayerViewModel (private val context: Context) : ViewModel() {
             _state.update { s ->
                 s.copy(
                     loading = false,
-                    playlists = result.getOrNull().orEmpty().map { YtPlaylistRow(it.playlistId.orEmpty(), it.title.orEmpty(), it.isSelected) },
+                    playlists = playlistRows(result.getOrNull()),
                     message = if (result.isFailure) "Couldn't load your playlists." else null
+                )
+            }
+        }
+    }
+
+    /** Watch later first, then the rest in YouTube's order. */
+    private fun playlistRows(list: List<com.liskovsoft.mediaserviceinterfaces.data.PlaylistInfo>?): List<YtPlaylistRow> =
+        list.orEmpty()
+            .map { YtPlaylistRow(it.playlistId.orEmpty(), it.title.orEmpty(), it.isSelected) }
+            .filter { it.id.isNotBlank() }
+            .sortedBy { if (it.title.contains("watch later", ignoreCase = true)) 0 else 1 }
+
+    /** Creates a playlist in the signed-in account and puts this video in it. */
+    fun createPlaylist(name: String) {
+        val info = _state.value.info ?: return
+        val clean = name.trim()
+        if (clean.isEmpty()) return
+        if (!_state.value.signedIn) {
+            _state.update { it.copy(message = "Sign in to YouTube first, with the account button on the YouTube page.") }
+            return
+        }
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { media.createPlaylistObserve(clean, info.videoId).ignoreElements().blockingAwait() }
+            }
+            if (result.isFailure) {
+                _state.update { it.copy(message = "Couldn't create that playlist.") }
+                return@launch
+            }
+            val refreshed = withContext(Dispatchers.IO) {
+                runCatching { media.getPlaylistsInfoObserve(info.videoId).blockingFirst() }.getOrNull()
+            }
+            _state.update {
+                it.copy(
+                    playlists = playlistRows(refreshed),
+                    message = "Created \"$clean\" and saved this video",
                 )
             }
         }

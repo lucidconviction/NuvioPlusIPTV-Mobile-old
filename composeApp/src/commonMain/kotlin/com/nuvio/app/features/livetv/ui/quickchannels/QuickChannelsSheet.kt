@@ -75,8 +75,20 @@ fun QuickChannelsSheet(
     onPlayChannel: (LiveChannel) -> Unit,
 ) {
     val tokens = MaterialTheme.nuvio.colors
+    // Bumped after reloading or changing custom data so every chip/list recomputes.
+    var quickDataVersion by remember { mutableStateOf(0) }
+    LaunchedEffect(Unit) {
+        // Re-read the stored quick channels each time the sheet opens.
+        QuickChannelList.reload()
+        quickDataVersion += 1
+    }
     var selectedCategory by remember { mutableStateOf(QuickChannelList.getChannelCategories().first()) }
-    val categories = QuickChannelList.getChannelCategories()
+    val categories = remember(quickDataVersion) { QuickChannelList.getChannelCategories() }
+    LaunchedEffect(quickDataVersion, categories) {
+        if (selectedCategory !in categories) {
+            selectedCategory = categories.firstOrNull() ?: "all"
+        }
+    }
     var selectedQc by remember { mutableStateOf<QuickChannel?>(null) }
     val liveChannels by LiveTvRepository.displayChannels.collectAsStateWithLifecycle(initialValue = emptyList())
     val validation = rememberQuickChannelMatchState(selectedQc, liveChannels)
@@ -88,8 +100,6 @@ fun QuickChannelsSheet(
     var showEditChannelDialog by remember { mutableStateOf(false) }
     var editingRegion by remember { mutableStateOf<QuickChannelList.QuickCategory?>(null) }
     var editingChannel by remember { mutableStateOf<QuickChannel?>(null) }
-    // Bumped after a custom channel/region is added, edited or deleted so the chip rows update.
-    var quickDataVersion by remember { mutableStateOf(0) }
 
     val filteredQc = remember(selectedCategory, quickDataVersion) {
         QuickChannelList.getChannelsForCategory(selectedCategory)
@@ -321,16 +331,21 @@ fun QuickChannelsSheet(
         AddChannelDialog(
             onDismiss = { showAddChannelDialog = false },
             onAdd = { name, aliases, regions, tags ->
-                val parsedRegions = regions.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }
+                val parsedRegions = regions.split(",")
+                    .map { it.trim().uppercase() }
+                    .filter { it.isNotBlank() && it != "ALL REGIONS" }
                 val channel = QuickChannel(
                     displayName = name.trim(),
                     aliases = aliases.split(",").map { it.trim() }.filter { it.isNotBlank() },
                     regions = if (parsedRegions.isEmpty()) listOf("CUSTOM") else parsedRegions,
                     tags = tags.split(",").map { it.trim().lowercase() }.filter { it.isNotBlank() }
                 )
-                QuickChannelList.addCustomChannel(channel)
-                quickDataVersion += 1
-                showAddChannelDialog = false
+                val added = QuickChannelList.addCustomChannel(channel)
+                if (added) {
+                    quickDataVersion += 1
+                    showAddChannelDialog = false
+                }
+                added
             },
         )
     }
@@ -363,17 +378,22 @@ fun QuickChannelsSheet(
             channel = channel,
             onDismiss = { showEditChannelDialog = false; editingChannel = null },
             onEdit = { name, aliases, regions, tags ->
-                val parsedRegions = regions.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }
+                val parsedRegions = regions.split(",")
+                    .map { it.trim().uppercase() }
+                    .filter { it.isNotBlank() && it != "ALL REGIONS" }
                 val updated = QuickChannel(
                     displayName = name.trim(),
                     aliases = aliases.split(",").map { it.trim() }.filter { it.isNotBlank() },
                     regions = if (parsedRegions.isEmpty()) listOf("CUSTOM") else parsedRegions,
                     tags = tags.split(",").map { it.trim().lowercase() }.filter { it.isNotBlank() }
                 )
-                QuickChannelList.updateCustomChannel(channel.displayName, updated)
-                quickDataVersion += 1
-                showEditChannelDialog = false
-                editingChannel = null
+                val saved = QuickChannelList.updateCustomChannel(channel.displayName, updated)
+                if (saved) {
+                    quickDataVersion += 1
+                    showEditChannelDialog = false
+                    editingChannel = null
+                }
+                saved
             },
         )
     }
@@ -462,7 +482,7 @@ private fun RegionDialogImpl(
 @Composable
 private fun AddChannelDialog(
     onDismiss: () -> Unit,
-    onAdd: (String, String, String, String) -> Unit,
+    onAdd: (String, String, String, String) -> Boolean,
 ) {
     ChannelDialogImpl(title = "Add Custom Quick Channel", initialName = "", initialAliases = "", initialRegions = "", initialTags = "", confirmText = "Add", onDismiss = onDismiss, onSubmit = onAdd)
 }
@@ -471,7 +491,7 @@ private fun AddChannelDialog(
 private fun EditChannelDialog(
     channel: QuickChannel,
     onDismiss: () -> Unit,
-    onEdit: (String, String, String, String) -> Unit,
+    onEdit: (String, String, String, String) -> Boolean,
 ) {
     ChannelDialogImpl(title = "Edit Quick Channel", initialName = channel.displayName, initialAliases = channel.aliases.joinToString(","), initialRegions = channel.regions.joinToString(","), initialTags = channel.tags.joinToString(","), confirmText = "Save", onDismiss = onDismiss, onSubmit = onEdit)
 }
@@ -485,13 +505,14 @@ private fun ChannelDialogImpl(
     initialTags: String,
     confirmText: String,
     onDismiss: () -> Unit,
-    onSubmit: (String, String, String, String) -> Unit,
+    onSubmit: (String, String, String, String) -> Boolean,
 ) {
     val tokens = MaterialTheme.nuvio.colors
     var channelName by remember { mutableStateOf(initialName) }
     var channelAliases by remember { mutableStateOf(initialAliases) }
     var channelRegions by remember { mutableStateOf(initialRegions) }
     var channelTags by remember { mutableStateOf(initialTags) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     // Available regions for dropdown
     val availableRegions = remember { QuickChannelList.allRegions() }
@@ -504,7 +525,7 @@ private fun ChannelDialogImpl(
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 OutlinedTextField(
                     value = channelName,
-                    onValueChange = { channelName = it },
+                    onValueChange = { channelName = it; errorMessage = null },
                     label = { Text("Channel Name (e.g., My Channel)", color = tokens.textMuted) },
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -620,10 +641,23 @@ private fun ChannelDialogImpl(
                         cursorColor = tokens.accent,
                     ),
                 )
+                errorMessage?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = tokens.danger,
+                    )
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSubmit(channelName, channelAliases, channelRegions, channelTags) }) {
+            TextButton(onClick = {
+                if (channelName.isBlank()) {
+                    errorMessage = "Enter a channel name."
+                } else if (!onSubmit(channelName, channelAliases, channelRegions, channelTags)) {
+                    errorMessage = "A quick channel with that name already exists."
+                }
+            }) {
                 Text(confirmText, color = tokens.accent)
             }
         },

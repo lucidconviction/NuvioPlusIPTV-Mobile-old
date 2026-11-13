@@ -11,6 +11,7 @@ import com.nuvio.app.features.livetv.model.LiveTvClock
 import com.nuvio.app.features.livetv.model.LiveTvSettings
 import com.nuvio.app.features.livetv.model.LiveUserState
 import com.nuvio.app.features.livetv.model.PlaylistSource
+import com.nuvio.app.features.livetv.virtual.VirtualChannelRepository
 import io.ktor.http.Url
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -57,10 +58,15 @@ internal object LiveTvRepository {
 
     /**
      * Listings around now (a few hours back, half a day ahead), by channel key, title and times
-     * only. The full guide is read from [EpgStore] as screens need it.
+     * only. The full guide is read from [EpgStore] as screens need it; Lucid TV's generated
+     * listings are merged in on top.
      */
     private val _programs = MutableStateFlow<Map<String, List<EpgProgram>>>(emptyMap())
-    val programs: StateFlow<Map<String, List<EpgProgram>>> = _programs.asStateFlow()
+    val programs: StateFlow<Map<String, List<EpgProgram>>> = combine(
+        _programs,
+        VirtualChannelRepository.programsWindow,
+    ) { stored, virtual -> if (virtual.isEmpty()) stored else mergePrograms(stored, virtual) }
+        .stateIn(scope, SharingStarted.Eagerly, emptyMap())
 
     /** Channel key -> the guide channel picked automatically (shown in Assign EPG). */
     private val _autoMatches = MutableStateFlow<Map<String, EpgAssignment>>(emptyMap())
@@ -89,7 +95,11 @@ internal object LiveTvRepository {
      */
     val displayChannels: StateFlow<List<LiveChannel>> = combine(
         combine(
-            _channels, prefs.userState, prefs.settings, _epgLogos,
+            combine(_channels, VirtualChannelRepository.channels) { playlistChannels, virtualChannels ->
+                if (virtualChannels.isEmpty()) playlistChannels
+                else (playlistChannels + virtualChannels).distinctBy { it.key }
+            },
+            prefs.userState, prefs.settings, _epgLogos,
             prefs.playlists.map { list -> list.filter { it.logoSource == "epg" }.mapTo(HashSet()) { it.id } }.distinctUntilChanged()
         ) { channels, user, s, logos, preferEpg ->
             withLogos(named(channels, user, s), logos, preferEpg)
@@ -111,6 +121,7 @@ internal object LiveTvRepository {
 
     /** Loads what's saved straight away, then checks for playlist and guide updates. */
     fun ensureLoaded(updateCheckDelayMs: Long = 4_000L) {
+        VirtualChannelRepository.ensureLoaded()
         if (initialized) return
         initialized = true
         scope.launch {
@@ -773,7 +784,7 @@ internal object LiveTvRepository {
 
     /** What's on now and next for each channel, from the hours kept in memory. */
     fun nowNext(keys: Collection<String>, nowMs: Long = LiveTvClock.nowMs()): Map<String, NowNext> {
-        val progs = _programs.value
+        val progs = programs.value
         val out = HashMap<String, NowNext>()
         keys.forEach { k ->
             val l = progs[k] ?: return@forEach
@@ -784,22 +795,48 @@ internal object LiveTvRepository {
         return out
     }
 
-    /** Listings for these channels across [fromMs, toMs), read from the stored guide. */
+    /** Listings for these channels across [fromMs, toMs), read from the stored guide and Lucid TV. */
     suspend fun programsIn(keys: Collection<String>, fromMs: Long, toMs: Long): Map<String, List<EpgProgram>> =
-        withContext(Dispatchers.Default) { EpgStore.range(fromMs, toMs, light = true, channels = keys) }
+        withContext(Dispatchers.Default) {
+            val stored = EpgStore.range(fromMs, toMs, light = true, channels = keys)
+            val virtual = VirtualChannelRepository.programsIn(keys, fromMs, toMs)
+            if (virtual.isEmpty()) stored else mergePrograms(stored, virtual)
+        }
 
     /** One show's full details. */
     suspend fun programDetails(channelKey: String, startMs: Long): EpgProgram? =
         withContext(Dispatchers.Default) { EpgStore.program(channelKey, startMs) }
-            ?: _programs.value[channelKey]?.firstOrNull { it.startMs == startMs }
+            ?: VirtualChannelRepository.programDetails(channelKey, startMs)
+            ?: programs.value[channelKey]?.firstOrNull { it.startMs == startMs }
 
     /** A channel's whole schedule for the days the guide keeps. */
     suspend fun channelSchedule(channelKey: String, fromMs: Long, toMs: Long): List<EpgProgram> =
-        withContext(Dispatchers.Default) { EpgStore.channelRange(channelKey, fromMs, toMs) }
+        withContext(Dispatchers.Default) {
+            val stored = EpgStore.channelRange(channelKey, fromMs, toMs)
+            val virtual = VirtualChannelRepository.programsIn(listOf(channelKey), fromMs, toMs)[channelKey].orEmpty()
+            if (virtual.isEmpty()) stored else mergePrograms(mapOf(channelKey to stored), mapOf(channelKey to virtual))[channelKey].orEmpty()
+        }
 
     /** Moves the in-memory window along (called now and then while Live TV is open). */
     fun refreshWindow() {
+        VirtualChannelRepository.refreshWindow()
         scope.launch { runCatching { loadGuideWindow() } }
+    }
+
+    /** Merges generated Lucid TV listings into the stored guide, channel by channel. */
+    private fun mergePrograms(
+        stored: Map<String, List<EpgProgram>>,
+        virtual: Map<String, List<EpgProgram>>,
+    ): Map<String, List<EpgProgram>> {
+        if (virtual.isEmpty()) return stored
+        val out = HashMap<String, List<EpgProgram>>(stored.size + virtual.size)
+        out.putAll(stored)
+        virtual.forEach { (key, generated) ->
+            val existing = out[key]
+            out[key] = if (existing.isNullOrEmpty()) generated
+            else (existing + generated).distinctBy { it.startMs }.sortedBy { it.startMs }
+        }
+        return out
     }
 
     // ---------------------------------------------------------------- display names and logos

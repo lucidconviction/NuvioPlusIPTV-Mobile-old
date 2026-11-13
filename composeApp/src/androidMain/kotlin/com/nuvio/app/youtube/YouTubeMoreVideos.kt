@@ -9,6 +9,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -24,22 +25,40 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Comment
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Subscriptions
+import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.WatchLater
+import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -56,6 +75,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -64,6 +84,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import com.nuvio.app.features.youtube.YouTubePlayRequest
 import kotlinx.coroutines.flow.flowOf
+import android.widget.Toast
 
 /**
  * The player's YouTube side buttons: Info, More Videos and Comments.
@@ -82,6 +103,7 @@ fun YouTubeMoreVideos(
     val context = LocalContext.current.applicationContext
     val vm: YouTubePlayerViewModel = viewModel(key = "yt-player-$videoId") { YouTubePlayerViewModel(context) }
     val state by vm.state.collectAsStateWithLifecycle()
+    LaunchedEffect(videoId) { vm.load(videoId) }
     val feed = YouTubeSession.feed
     val emptyQueue = remember { flowOf(emptyList<YtItem>()) }
     val queue by (feed?.queue ?: emptyQueue).collectAsStateWithLifecycle(initialValue = emptyList())
@@ -100,6 +122,54 @@ fun YouTubeMoreVideos(
                 feed.activate(item = item, from = from, onError = onError, onReady = onReady)
             }
         },
+        onPrevious = {
+            if (feed == null) {
+                Toast.makeText(context, "The YouTube queue isn't available.", Toast.LENGTH_SHORT).show()
+            } else {
+                feed.playPrevious(
+                    videoId,
+                    { playable ->
+                        onPlay(
+                            YouTubePlayRequest(
+                                url = playable.url,
+                                title = playable.title,
+                                poster = playable.poster,
+                                videoId = playable.videoId,
+                                startPositionMs = playable.startPositionMs,
+                            )
+                        )
+                    },
+                    { Toast.makeText(context, "There's no earlier video in this list.", Toast.LENGTH_SHORT).show() },
+                )
+            }
+        },
+        onNext = {
+            if (feed == null) {
+                Toast.makeText(context, "The YouTube queue isn't available.", Toast.LENGTH_SHORT).show()
+            } else {
+                feed.playNext(
+                    videoId,
+                    { playable ->
+                        onPlay(
+                            YouTubePlayRequest(
+                                url = playable.url,
+                                title = playable.title,
+                                poster = playable.poster,
+                                videoId = playable.videoId,
+                                startPositionMs = playable.startPositionMs,
+                            )
+                        )
+                    },
+                    { Toast.makeText(context, "That's the end of the list.", Toast.LENGTH_SHORT).show() },
+                )
+            }
+        },
+        onToggleLike = vm::toggleLike,
+        onToggleDislike = vm::toggleDislike,
+        onToggleSubscribe = vm::toggleSubscribe,
+        onLoadPlaylists = vm::loadPlaylists,
+        onTogglePlaylist = vm::togglePlaylist,
+        onCreatePlaylist = vm::createPlaylist,
         onLoadInfo = { vm.load(videoId) },
         onLoadComments = { newest -> vm.loadComments(newest) },
         onLoadMoreComments = vm::loadMoreComments,
@@ -110,7 +180,7 @@ fun YouTubeMoreVideos(
     )
 }
 
-internal enum class SidePanelMode { INFO, MORE, COMMENTS, REPLIES }
+internal enum class SidePanelMode { INFO, MORE, COMMENTS, REPLIES, PLAYLISTS, QUALITY }
 
 /** The buttons and panels, independent of the view models so they can be tested on their own. */
 @Composable
@@ -121,6 +191,14 @@ internal fun YouTubePlayerSidePanelsContent(
     buttonVisible: Boolean,
     onPlay: (YouTubePlayRequest) -> Unit,
     onActivate: (YtItem, List<YtItem>, (YtPlayable) -> Unit, (String) -> Unit) -> Unit,
+    onPrevious: () -> Unit = {},
+    onNext: () -> Unit = {},
+    onToggleLike: () -> Unit = {},
+    onToggleDislike: () -> Unit = {},
+    onToggleSubscribe: () -> Unit = {},
+    onLoadPlaylists: () -> Unit = {},
+    onTogglePlaylist: (YtPlaylistRow) -> Unit = {},
+    onCreatePlaylist: (String) -> Unit = {},
     bottomInset: Dp = 0.dp,
     onLoadInfo: () -> Unit = {},
     onLoadComments: (Boolean) -> Unit = {},
@@ -134,6 +212,7 @@ internal fun YouTubePlayerSidePanelsContent(
     var lastMode by remember { mutableStateOf(SidePanelMode.MORE) }
     var loadingVideoId by remember { mutableStateOf<String?>(null) }
     var replyingTo by remember { mutableStateOf<YtComment?>(null) }
+    val context = LocalContext.current
 
     // A new video is playing: clear any spinner and close a panel left over from the previous one.
     LaunchedEffect(videoId) {
@@ -141,9 +220,21 @@ internal fun YouTubePlayerSidePanelsContent(
         loadingVideoId = null
         replyingTo = null
     }
-    LaunchedEffect(mode) { if (mode != null) lastMode = mode!! }
+    LaunchedEffect(mode) {
+        if (mode != null) lastMode = mode!!
+        if (mode == SidePanelMode.PLAYLISTS) onLoadPlaylists()
+    }
+    // A direct button's result (signed out, saved, …) is shown as a toast while no panel is open.
+    LaunchedEffect(state.message, mode) {
+        if (mode == null) state.message?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            onClearMessage()
+        }
+    }
     val shownMode = mode ?: lastMode
     val currentItem = queue.firstOrNull { it.videoId == videoId }
+    val queueIndex = queue.indexOfFirst { it.videoId == videoId }
+    val hasPrevious = queueIndex > 0 && queue.subList(0, queueIndex).any { it.kind == YtKind.VIDEO && !it.isLive }
 
     fun open(next: SidePanelMode) {
         if (next == SidePanelMode.INFO || next == SidePanelMode.COMMENTS) onLoadInfo()
@@ -185,40 +276,106 @@ internal fun YouTubePlayerSidePanelsContent(
             exit = fadeOut(),
         ) {
             Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp)
+                    .testTag("yt-action-row"),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 SidePanelButton(
-                    label = "Info",
-                    icon = { tint -> Icon(Icons.Filled.Info, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp)) },
-                    testTag = "yt-info-button",
-                    onClick = { open(SidePanelMode.INFO) },
+                    label = "Last",
+                    icon = { tint -> Icon(Icons.Filled.SkipPrevious, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp)) },
+                    testTag = "yt-previous-button",
+                    enabled = hasPrevious,
+                    onClick = onPrevious,
                 )
+                Row(
+                    modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    SidePanelButton(
+                        label = "Info",
+                        icon = { tint -> Icon(Icons.Filled.Info, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp)) },
+                        testTag = "yt-info-button",
+                        onClick = { open(SidePanelMode.INFO) },
+                    )
+                    SidePanelButton(
+                        label = "More Videos",
+                        icon = { tint ->
+                            Icon(
+                                Icons.AutoMirrored.Filled.PlaylistPlay,
+                                contentDescription = null,
+                                tint = tint,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        },
+                        testTag = "yt-more-videos-button",
+                        onClick = { open(SidePanelMode.MORE) },
+                    )
+                    SidePanelButton(
+                        label = "Comments",
+                        icon = { tint ->
+                            Icon(
+                                Icons.AutoMirrored.Filled.Comment,
+                                contentDescription = null,
+                                tint = tint,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        },
+                        testTag = "yt-comments-button",
+                        onClick = { open(SidePanelMode.COMMENTS) },
+                    )
+                    val liked = state.info?.liked == true
+                    val disliked = state.info?.disliked == true
+                    SidePanelButton(
+                        label = state.info?.likeCount?.let { "Like  $it" } ?: "Like",
+                        icon = { tint -> Icon(Icons.Filled.ThumbUp, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp)) },
+                        testTag = "yt-like-button",
+                        highlighted = liked,
+                        onClick = onToggleLike,
+                    )
+                    SidePanelButton(
+                        label = "Dislike",
+                        icon = { tint -> Icon(Icons.Filled.ThumbDown, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp)) },
+                        testTag = "yt-dislike-button",
+                        highlighted = disliked,
+                        onClick = onToggleDislike,
+                    )
+                    val subscribed = state.info?.subscribed == true
+                    SidePanelButton(
+                        label = if (subscribed) "Subscribed" else "Subscribe",
+                        icon = { tint ->
+                            Icon(
+                                if (subscribed) Icons.Filled.Check else Icons.Filled.Subscriptions,
+                                contentDescription = null,
+                                tint = tint,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        },
+                        testTag = "yt-subscribe-button",
+                        highlighted = subscribed,
+                        onClick = onToggleSubscribe,
+                    )
+                    SidePanelButton(
+                        label = "Watch later",
+                        icon = { tint -> Icon(Icons.Filled.WatchLater, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp)) },
+                        testTag = "yt-watch-later-button",
+                        onClick = { open(SidePanelMode.PLAYLISTS) },
+                    )
+                    SidePanelButton(
+                        label = "Quality",
+                        icon = { tint -> Icon(Icons.Filled.Tune, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp)) },
+                        testTag = "yt-quality-button",
+                        onClick = { open(SidePanelMode.QUALITY) },
+                    )
+                }
                 SidePanelButton(
-                    label = "More Videos",
-                    icon = { tint ->
-                        Icon(
-                            Icons.AutoMirrored.Filled.PlaylistPlay,
-                            contentDescription = null,
-                            tint = tint,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    },
-                    testTag = "yt-more-videos-button",
-                    onClick = { open(SidePanelMode.MORE) },
-                )
-                SidePanelButton(
-                    label = "Comments",
-                    icon = { tint ->
-                        Icon(
-                            Icons.AutoMirrored.Filled.Comment,
-                            contentDescription = null,
-                            tint = tint,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    },
-                    testTag = "yt-comments-button",
-                    onClick = { open(SidePanelMode.COMMENTS) },
+                    label = "Next",
+                    icon = { tint -> Icon(Icons.Filled.SkipNext, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp)) },
+                    testTag = "yt-next-button",
+                    onClick = onNext,
                 )
             }
         }
@@ -265,6 +422,13 @@ internal fun YouTubePlayerSidePanelsContent(
                             },
                         )
                         SidePanelMode.REPLIES -> RepliesPanel(state, onMore = onLoadMoreReplies)
+                        SidePanelMode.PLAYLISTS -> PlaylistsPanel(
+                            state = state,
+                            onToggle = onTogglePlaylist,
+                            onCreate = onCreatePlaylist,
+                            onRetry = onLoadPlaylists,
+                        )
+                        SidePanelMode.QUALITY -> YouTubeQualityPanel()
                     }
                 }
 
@@ -288,24 +452,33 @@ private fun SidePanelButton(
     icon: @Composable (Color) -> Unit,
     testTag: String,
     onClick: () -> Unit,
+    enabled: Boolean = true,
+    highlighted: Boolean = false,
 ) {
     Row(
         modifier = Modifier
             .testTag(testTag)
             .clip(RoundedCornerShape(50))
-            .background(Color(0xB3000000))
-            .border(1.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(50))
-            .clickable(onClick = onClick)
+            .background(
+                when {
+                    highlighted -> Color(0xFFE53935)
+                    else -> Color(0xB3000000)
+                }
+            )
+            .border(1.dp, if (highlighted) Color.Transparent else Color.White.copy(alpha = 0.22f), RoundedCornerShape(50))
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        icon(Color.White)
+        val tint = if (enabled) Color.White else Color.White.copy(alpha = 0.4f)
+        icon(tint)
         Text(
             text = label,
-            color = Color.White,
+            color = tint,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
         )
     }
 }
@@ -330,6 +503,8 @@ private fun PanelHeader(
                 when (mode) {
                     SidePanelMode.INFO -> Icons.Filled.Info
                     SidePanelMode.MORE -> Icons.AutoMirrored.Filled.PlaylistPlay
+                    SidePanelMode.PLAYLISTS -> Icons.Filled.PlaylistAdd
+                    SidePanelMode.QUALITY -> Icons.Filled.Tune
                     else -> Icons.AutoMirrored.Filled.Comment
                 },
                 contentDescription = null,
@@ -345,6 +520,8 @@ private fun PanelHeader(
                     SidePanelMode.MORE -> "More Videos"
                     SidePanelMode.COMMENTS -> "Comments"
                     SidePanelMode.REPLIES -> "Replies"
+                    SidePanelMode.PLAYLISTS -> "Save to playlist"
+                    SidePanelMode.QUALITY -> "Quality"
                 },
                 color = Color.White,
                 style = MaterialTheme.typography.titleSmall,
@@ -507,6 +684,86 @@ private fun MoreVideosPanel(
                     )
                 },
             )
+        }
+    }
+}
+
+@Composable
+private fun PlaylistsPanel(
+    state: YtPlayerState,
+    onToggle: (YtPlaylistRow) -> Unit,
+    onCreate: (String) -> Unit,
+    onRetry: () -> Unit,
+) {
+    if (!state.signedIn) {
+        Centered("Sign in on the YouTube page to save videos.")
+        return
+    }
+    var name by remember { mutableStateOf("") }
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                placeholder = { Text("New playlist") },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = {
+                    if (name.isNotBlank()) {
+                        onCreate(name)
+                        name = ""
+                    }
+                }),
+            )
+            Button(
+                enabled = name.isNotBlank(),
+                onClick = {
+                    onCreate(name)
+                    name = ""
+                },
+            ) {
+                Icon(Icons.Filled.CreateNewFolder, contentDescription = null, modifier = Modifier.size(18.dp))
+            }
+        }
+        val rows = state.playlists
+        when {
+            rows == null && state.loading ->
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            rows == null -> Column(
+                Modifier.fillMaxSize().padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text("Couldn't load your playlists.", color = Color(0xFFB0B0B0))
+                TextButton(onClick = onRetry) { Text("Try again") }
+            }
+            rows.isEmpty() -> Centered("You don't have any playlists yet. Create one above.")
+            else -> LazyColumn(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)) {
+                items(rows) { row ->
+                    val watchLater = row.title.contains("watch later", ignoreCase = true)
+                    Row(
+                        Modifier.fillMaxWidth().clickable { onToggle(row) }.padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(checked = row.contains, onCheckedChange = { onToggle(row) })
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = if (watchLater) "Watch later" else row.title,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (watchLater) {
+                                Text("YouTube's Watch later playlist", style = MaterialTheme.typography.labelSmall, color = Color(0xFF9A9A9A))
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

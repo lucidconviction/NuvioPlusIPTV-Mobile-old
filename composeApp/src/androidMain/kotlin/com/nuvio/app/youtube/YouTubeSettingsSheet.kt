@@ -109,6 +109,9 @@ private fun YouTubeSettingsBody() {
         Toggle("Autoplay next video", "When a video ends, play the next one", YouTubeSettings.autoplayNext(context)) {
             changed { YouTubeSettings.setAutoplayNext(context, it) }
         }
+        Toggle("Resume playback", "Start where you left off, instead of from the beginning", YouTubeSettings.resumePlayback(context)) {
+            changed { YouTubeSettings.setResumePlayback(context, it) }
+        }
         Choice("Start at", YouTubeSettings.qualityLabel(YouTubeSettings.preferredHeight(context))) {
             val c = YouTubeSettings.qualityChoices
             changed { YouTubeSettings.setPreferredHeight(context, c[(c.indexOf(YouTubeSettings.preferredHeight(context)) + 1) % c.size]) }

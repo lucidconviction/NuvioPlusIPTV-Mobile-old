@@ -26,6 +26,7 @@ object YouTubeSettings {
     private const val KEY_CODEC = "codec_preference"
     private const val KEY_FEED_PREVIEW = "feed_preview"
     private const val KEY_CONTENT_REGION = "content_region"
+    private const val KEY_RESUME = "resume_playback"
 
     /** SponsorBlock's segment types, in the order they're listed. */
     val sponsorCategories: List<Pair<String, String>> = listOf(
@@ -211,6 +212,13 @@ object YouTubeSettings {
 
     fun setPreferredHeight(context: Context, height: Int) {
         prefs(context).edit().putInt(KEY_QUALITY, height).apply()
+    }
+
+    /** Start videos where you left off; off means from the beginning. */
+    fun resumePlayback(context: Context) = prefs(context).getBoolean(KEY_RESUME, true)
+
+    fun setResumePlayback(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean(KEY_RESUME, on).apply()
     }
 
     fun qualityLabel(height: Int) = if (height <= 0) "Auto" else "${height}p"

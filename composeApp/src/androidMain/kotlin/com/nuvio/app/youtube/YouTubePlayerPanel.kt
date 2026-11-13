@@ -105,7 +105,7 @@ fun YouTubePlayerPanel(videoId: String, onDismiss: () -> Unit) {
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                         when (mode) {
                             PanelMode.MAIN -> Main(state, vm, onPlaylists = { mode = PanelMode.PLAYLISTS }, onComments = { mode = PanelMode.COMMENTS }, onQuality = { mode = PanelMode.QUALITY })
-                            PanelMode.QUALITY -> Quality()
+                            PanelMode.QUALITY -> YouTubeQualityPanel()
                             PanelMode.PLAYLISTS -> Playlists(state, vm)
                             PanelMode.COMMENTS -> Comments(state, vm, onReplies = { key -> vm.loadReplies(key); mode = PanelMode.REPLIES })
                             PanelMode.REPLIES -> Replies(state, vm)
@@ -215,7 +215,7 @@ private fun Action(label: String, modifier: Modifier = Modifier, detail: String?
 }
 
 @Composable
-private fun Quality() {
+internal fun YouTubeQualityPanel() {
     val context = LocalContext.current.applicationContext
     val player = YouTubePlayerHandle.player
     if (player == null) {
@@ -249,10 +249,18 @@ private fun Quality() {
             Text("Size", style = MaterialTheme.typography.bodySmall, color = Color(0xFFB0B0B0), modifier = Modifier.padding(top = 12.dp))
         }
         item {
-            Action(label = "Auto", highlighted = pinned == 0, onClick = { player.selectQuality(context, 0); version++ })
+            Action(label = "Auto", highlighted = pinned == 0, onClick = {
+                player.selectQuality(context, 0)
+                YouTubeSettings.setPreferredHeight(context, 0)
+                version++
+            })
         }
         items(heights) { h ->
-            Action(label = YouTubeSettings.qualityLabel(h), highlighted = pinned == h, onClick = { player.selectQuality(context, h); version++ })
+            Action(label = YouTubeSettings.qualityLabel(h), highlighted = pinned == h, onClick = {
+                player.selectQuality(context, h)
+                YouTubeSettings.setPreferredHeight(context, h)
+                version++
+            })
         }
     }
 }

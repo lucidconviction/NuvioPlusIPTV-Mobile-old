@@ -9,6 +9,7 @@ import com.nuvio.app.features.livetv.sports.SportsReminders
 import com.nuvio.app.features.livetv.sports.SportsRepository
 import com.nuvio.app.features.livetv.sync.LiveTvCloudSync
 import com.nuvio.app.features.livetv.sync.LiveTvDriveSync
+import com.nuvio.app.features.livetv.virtual.VirtualChannelRepository
 
 /** Starts Live TV's background work once the preferences are installed: updates and Drive sync. */
 internal object LiveTvStartup {
@@ -17,8 +18,9 @@ internal object LiveTvStartup {
     fun start() {
         if (started) return
         started = true
-        // Nothing to do until a playlist exists; the first one added starts the repository.
-        if (LiveTvPreferences.currentPlaylists().isNotEmpty() || LiveTvPreferences.currentEpgSources().isNotEmpty()) {
+        VirtualChannelRepository.ensureLoaded()
+        // Nothing to do until a playlist (or a Lucid TV channel) exists; the first one starts the repository.
+        if (LiveTvPreferences.currentPlaylists().isNotEmpty() || LiveTvPreferences.currentEpgSources().isNotEmpty() || VirtualChannelRepository.hasChannels()) {
             LiveTvRepository.ensureLoaded(updateCheckDelayMs = 8_000L)
         }
         LiveTvDriveSync.start()

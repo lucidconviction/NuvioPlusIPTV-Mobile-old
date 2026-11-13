@@ -2,18 +2,6 @@ package com.nuvio.app.features.livetv.ui.quickchannels
 
 import com.nuvio.app.features.livetv.data.LiveTvPreferences
 import com.nuvio.app.features.livetv.model.LiveChannel
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.add
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
 
 data class QuickChannel(
     val displayName: String,
@@ -61,72 +49,38 @@ object QuickChannelList {
 
     /**
      * User-added regions and channels are stored on this device so they survive a restart. The
-     * first Quick Channels read loads them; every add, edit or delete writes them back.
+     * first Quick Channels read loads them; every add, edit or delete writes them back. The sheet
+     * also calls [reload] when it opens, so a restored or externally changed store is picked up.
      */
     private fun ensureLoaded() {
         if (loaded) return
         loaded = true
-        val raw = LiveTvPreferences.currentQuickChannelData() ?: return
-        runCatching {
-            val root = Json.parseToJsonElement(raw).jsonObject
-            root["categories"]?.jsonArray?.forEach { element ->
-                val o = element.jsonObject
-                val id = o.string("id")
-                if (id.isNotBlank() && _customCategories.none { it.id == id }) {
-                    _customCategories += QuickCategory(
-                        id = id,
-                        title = o.string("title").ifBlank { id },
-                        description = o.string("description"),
-                        tags = o.strings("tags"),
-                    )
-                }
-            }
-            root["channels"]?.jsonArray?.forEach { element ->
-                val o = element.jsonObject
-                val name = o.string("displayName")
-                if (name.isNotBlank() && _customChannels.none { it.displayName == name }) {
-                    _customChannels += QuickChannel(
-                        displayName = name,
-                        aliases = o.strings("aliases"),
-                        regions = o.strings("regions"),
-                        tags = o.strings("tags"),
-                    )
-                }
-            }
-        }
+        val stored = QuickChannelCodec.decode(LiveTvPreferences.currentQuickChannelData())
+        _customCategories.clear()
+        _customCategories += stored.categories
+        _customChannels.clear()
+        _customChannels += stored.channels
+    }
+
+    /** Re-reads the stored list (the sheet does this each time it opens). */
+    fun reload() {
+        loaded = false
+        ensureLoaded()
     }
 
     private fun persist() {
-        val json = buildJsonObject {
-            put("categories", buildJsonArray {
-                _customCategories.forEach { category ->
-                    add(buildJsonObject {
-                        put("id", category.id)
-                        put("title", category.title)
-                        put("description", category.description)
-                        put("tags", buildJsonArray { category.tags.forEach { add(it) } })
-                    })
-                }
-            })
-            put("channels", buildJsonArray {
-                _customChannels.forEach { channel ->
-                    add(buildJsonObject {
-                        put("displayName", channel.displayName)
-                        put("aliases", buildJsonArray { channel.aliases.forEach { add(it) } })
-                        put("regions", buildJsonArray { channel.regions.forEach { add(it) } })
-                        put("tags", buildJsonArray { channel.tags.forEach { add(it) } })
-                    })
-                }
-            })
+        runCatching {
+            LiveTvPreferences.saveQuickChannelData(
+                QuickChannelCodec.encode(_customCategories, _customChannels)
+            )
         }
-        runCatching { LiveTvPreferences.saveQuickChannelData(json.toString()) }
     }
 
-    private fun JsonObject.string(key: String): String =
-        (this[key] as? JsonPrimitive)?.contentOrNull.orEmpty()
-
-    private fun JsonObject.strings(key: String): List<String> =
-        (this[key] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty()
+    /** Built-in channels, with a user-added channel of the same name taking its place. */
+    private fun combinedChannels(): List<QuickChannel> {
+        val customNames = _customChannels.mapTo(HashSet()) { it.displayName }
+        return _customChannels + defaultChannels.filterNot { it.displayName in customNames }
+    }
 
     fun getChannelCategories(): List<String> = allCategories().map { it.id }
 
@@ -144,8 +98,11 @@ object QuickChannelList {
     /** Adds a new custom category. Returns false if a category with that id already exists. */
     fun addCustomCategory(category: QuickCategory): Boolean {
         ensureLoaded()
-        if (_customCategories.any { it.id == category.id }) return false
-        _customCategories.add(category)
+        val id = category.id.trim()
+        val title = category.title.trim()
+        if (id.isBlank() || title.isBlank()) return false
+        if (_customCategories.any { it.id.equals(id, ignoreCase = true) }) return false
+        _customCategories.add(category.copy(id = id, title = title))
         persist()
         return true
     }
@@ -162,15 +119,16 @@ object QuickChannelList {
 
     fun getChannelsForCategory(categoryId: String): List<QuickChannel> {
         ensureLoaded()
+        val all = combinedChannels()
         val norm = categoryId.trim().lowercase().replace("_", "-").replace(" ", "-")
         return when (norm) {
-            "all" -> defaultChannels + _customChannels
-            "custom" -> (defaultChannels + _customChannels).filter { "CUSTOM" in it.effectiveRegions }
+            "all" -> all
+            "custom" -> all.filter { "CUSTOM" in it.effectiveRegions }
             else -> {
                 val isCustomCat = customCategories.any { it.id == norm }
                 if (isCustomCat) {
                     _customChannels.filter { customCatMatches(it, norm) }
-                } else (defaultChannels + _customChannels).filter { qc ->
+                } else all.filter { qc ->
                     when (norm) {
                         "us" -> "US" in qc.effectiveRegions
                         "uk" -> "UK" in qc.effectiveRegions
@@ -189,15 +147,28 @@ object QuickChannelList {
     private fun customCatMatches(qc: QuickChannel, categoryId: String): Boolean {
         ensureLoaded()
         val cat = customCategories.find { it.id == categoryId } ?: return false
+        val wanted = categoryId.lowercase().filter { it.isLetterOrDigit() }
         return cat.tags.any { tag -> tag in qc.tags } ||
-            qc.regions.any { r -> r.lowercase() == categoryId.replace("-", "") }
+            qc.regions.any { r -> r.lowercase().filter { it.isLetterOrDigit() } == wanted }
     }
 
-    /** Adds a custom quick channel. Returns false if a channel with that display name already exists. */
+    /**
+     * Adds a custom quick channel. A name used by a built-in channel is allowed: the user's
+     * version replaces it in the lists. Returns false for a blank name or a duplicate custom.
+     */
     fun addCustomChannel(channel: QuickChannel): Boolean {
         ensureLoaded()
-        if (_customChannels.any { it.displayName == channel.displayName } || defaultChannels.any { it.displayName == channel.displayName }) return false
-        _customChannels.add(channel)
+        val name = channel.displayName.trim()
+        if (name.isBlank()) return false
+        if (_customChannels.any { it.displayName.equals(name, ignoreCase = true) }) return false
+        _customChannels.add(
+            channel.copy(
+                displayName = name,
+                aliases = channel.aliases.map { it.trim() }.filter { it.isNotBlank() }.distinct(),
+                regions = channel.regions.map { it.trim() }.filter { it.isNotBlank() }.distinct(),
+                tags = channel.tags.map { it.trim() }.filter { it.isNotBlank() }.distinct(),
+            )
+        )
         persist()
         return true
     }
@@ -212,14 +183,23 @@ object QuickChannelList {
         return true
     }
 
-    /** Updates an existing custom quick channel. Returns false if not found or not custom. */
+    /** Updates an existing custom quick channel. Returns false if not found or the new name collides. */
     fun updateCustomChannel(oldDisplayName: String, channel: QuickChannel): Boolean {
         ensureLoaded()
         val index = _customChannels.indexOfFirst { it.displayName == oldDisplayName }
         if (index < 0) return false
+        val name = channel.displayName.trim()
+        if (name.isBlank()) return false
         // Don't collide with another custom channel's new display name
-        if (channel.displayName != oldDisplayName && _customChannels.any { it.displayName == channel.displayName }) return false
-        _customChannels[index] = channel
+        if (!name.equals(oldDisplayName, ignoreCase = true) &&
+            _customChannels.any { it.displayName.equals(name, ignoreCase = true) }
+        ) return false
+        _customChannels[index] = channel.copy(
+            displayName = name,
+            aliases = channel.aliases.map { it.trim() }.filter { it.isNotBlank() }.distinct(),
+            regions = channel.regions.map { it.trim() }.filter { it.isNotBlank() }.distinct(),
+            tags = channel.tags.map { it.trim() }.filter { it.isNotBlank() }.distinct(),
+        )
         persist()
         return true
     }
@@ -229,8 +209,11 @@ object QuickChannelList {
         ensureLoaded()
         val index = _customCategories.indexOfFirst { it.id == oldId }
         if (index < 0) return false
-        if (category.id != oldId && _customCategories.any { it.id == category.id }) return false
-        _customCategories[index] = category
+        val id = category.id.trim()
+        val title = category.title.trim()
+        if (id.isBlank() || title.isBlank()) return false
+        if (!id.equals(oldId, ignoreCase = true) && _customCategories.any { it.id.equals(id, ignoreCase = true) }) return false
+        _customCategories[index] = category.copy(id = id, title = title)
         persist()
         return true
     }
@@ -245,7 +228,7 @@ object QuickChannelList {
     fun allRegions(): List<String> {
         ensureLoaded()
         val regions = mutableSetOf<String>()
-        (defaultChannels + _customChannels).forEach { qc ->
+        combinedChannels().forEach { qc ->
             qc.regions.forEach { regions.add(it) }
             if (qc.regions.isEmpty()) regions.add("CUSTOM")
         }

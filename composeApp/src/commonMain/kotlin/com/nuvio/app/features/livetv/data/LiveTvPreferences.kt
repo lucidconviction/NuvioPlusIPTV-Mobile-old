@@ -238,6 +238,11 @@ internal object LiveTvKeys {
     /** Stream validation: when the last check finished (this device only). */
     const val validationLastRun = "stream_validation_last_run"
 
+    /** Lucid TV: virtual channel definitions (synced with the TV app), as JSON. */
+    const val virtualChannels = "virtual_channels"
+    /** Lucid TV: cached pool snapshots per virtual channel (synced; lets a cold start show a guide). */
+    const val virtualPools = "virtual_pools"
+
     /** Separates the EPG source id from the channel id in a stored EPG assignment. */
     const val EPG_SEP = "\u0001"
 
@@ -686,6 +691,31 @@ internal open class LiveTvPreferencesStore {
         }
     }
 
+    /** Lucid TV: the virtual channel definitions, in the TV app's JSON schema. */
+    fun currentVirtualChannelsJson(): String? = _data.value.str(LiveTvKeys.virtualChannels)
+
+    val virtualChannelsJson: StateFlow<String?> = _data
+        .map { it.str(LiveTvKeys.virtualChannels) }
+        .distinctUntilChanged()
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    fun setVirtualChannelsJson(json: String?) {
+        edit { p ->
+            if (json.isNullOrBlank()) p.remove(LiveTvKeys.virtualChannels)
+            else p[LiveTvKeys.virtualChannels] = PrefValue.Str(json)
+        }
+    }
+
+    /** Lucid TV: cached pool snapshots, so the guide is there before the first refresh finishes. */
+    fun currentVirtualPoolsJson(): String? = _data.value.str(LiveTvKeys.virtualPools)
+
+    fun setVirtualPoolsJson(json: String?) {
+        edit { p ->
+            if (json.isNullOrBlank()) p.remove(LiveTvKeys.virtualPools)
+            else p[LiveTvKeys.virtualPools] = PrefValue.Str(json)
+        }
+    }
+
     /** Channel keys whose stream failed the last validation run, kept on this device. */
     val validationFailed: StateFlow<Set<String>> = _device
         .map { it.strSet(LiveTvKeys.validationFailed) ?: emptySet() }
@@ -1128,6 +1158,8 @@ internal open class LiveTvPreferencesStore {
     }
 
     fun setGroupName(groupId: String, name: String?) {
+        // Lucid TV has one fixed group; its name is not editable.
+        if (groupId.startsWith("virtual:")) return
         if (groupId.startsWith(ChannelGroup.CUSTOM_PREFIX)) {
             updateCustomGroups { list -> list.map { if (it.id == groupId && !name.isNullOrBlank()) it.copy(name = name.trim()) else it } }
             return

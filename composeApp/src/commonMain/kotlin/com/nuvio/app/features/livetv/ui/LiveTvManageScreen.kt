@@ -156,13 +156,18 @@ private fun ManageGroups(groups: List<ChannelGroup>, hidden: Set<String>) {
         items(order, key = { it.id }) { g ->
             ReorderableItem(reorder, key = g.id) {
                 val isHidden = g.id in hidden
+                val fixedLucid = g.sourceId == com.nuvio.app.features.livetv.virtual.VirtualChannels.SOURCE_ID
                 ManageRow(
                     title = g.title,
-                    subtitle = listOfNotNull(if (g.id.startsWith(ChannelGroup.CUSTOM_PREFIX)) "Your group" else null, "${g.count} channels").joinToString(" · "),
+                    subtitle = listOfNotNull(
+                        if (g.id.startsWith(ChannelGroup.CUSTOM_PREFIX)) "Your group" else null,
+                        if (fixedLucid) "Lucid TV group" else null,
+                        "${g.count} channels",
+                    ).joinToString(" · "),
                     hidden = isHidden,
                     onToggle = { LiveTvPreferences.setGroupHidden(g.id, !isHidden) },
-                    onClick = { renaming = g },
-                    handle = Modifier.draggableHandle(
+                    onClick = { if (!fixedLucid) renaming = g },
+                    handle = if (fixedLucid) Modifier else Modifier.draggableHandle(
                         onDragStarted = { haptics.performHapticFeedback(HapticFeedbackType.LongPress) },
                         onDragStopped = { LiveTvPreferences.setGroupOrder(order.map { it.id }) },
                     ),

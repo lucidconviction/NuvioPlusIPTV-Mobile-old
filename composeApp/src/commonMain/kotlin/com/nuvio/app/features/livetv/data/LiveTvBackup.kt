@@ -58,12 +58,16 @@ internal object LiveTvBackup {
         }
     }
 
-    /** Whether a setup from [exportForSync] has any playlist or guide in it. */
+    /** Whether a setup from [exportForSync] has any playlist, guide or Lucid TV channel in it. */
     fun syncHasSources(data: JsonObject?): Boolean {
         if (data == null) return false
         fun raw(key: String) = data.optJSONObject(key)?.optString("v")
         return runCatching { LiveTvCodec.decodePlaylists(raw(LiveTvKeys.playlists)).isNotEmpty() }.getOrDefault(false) ||
-            runCatching { LiveTvCodec.decodeEpgs(raw(LiveTvKeys.epgs)).isNotEmpty() }.getOrDefault(false)
+            runCatching { LiveTvCodec.decodeEpgs(raw(LiveTvKeys.epgs)).isNotEmpty() }.getOrDefault(false) ||
+            runCatching {
+                com.nuvio.app.features.livetv.virtual.VirtualChannelCodec
+                    .decodeSpecs(raw(LiveTvKeys.virtualChannels)).isNotEmpty()
+            }.getOrDefault(false)
     }
 
     /** The result of [importInto]: the new map, and the playlists that need downloading again. */

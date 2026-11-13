@@ -9,6 +9,7 @@ import com.nuvio.app.features.livetv.model.LiveChannel
 import com.nuvio.app.features.livetv.model.LiveTvSettings
 import com.nuvio.app.features.livetv.model.LiveUserState
 import com.nuvio.app.features.livetv.parental.ParentalControls
+import com.nuvio.app.features.livetv.virtual.VirtualChannels
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -51,7 +52,13 @@ internal object LiveTvViewState {
         LiveTvPreferences.playlists,
         ParentalControls.unlocked,
     ) { channels, user, s, playlists, unlocked ->
-        build(channels, user, s, playlists.any { it.liveEnabled }, unlocked)
+        build(
+            channels = channels,
+            user = user,
+            s = s,
+            hasSources = playlists.any { it.liveEnabled } || channels.any { it.sourceId == VirtualChannels.SOURCE_ID },
+            unlocked = unlocked,
+        )
     }.stateIn(scope, SharingStarted.Eagerly, LiveTvListState())
 
     fun build(channels: List<LiveChannel>, user: LiveUserState, s: LiveTvSettings, hasSources: Boolean, unlocked: Set<String> = emptySet()): LiveTvListState {
@@ -136,9 +143,12 @@ internal object LiveTvViewState {
         }
         val orderIndex = user.groupOrder.withIndex().associate { (i, id) -> id to i }
         val playlistIndex = HashMap<String, Int>().also { m -> visible.forEach { c -> if (c.sourceId !in m) m[c.sourceId] = m.size } }
-        val orderedRegular = when (s.groupSort) {
-            "playlist" -> regular
-            "name" -> regular.sortedWith(
+        // The fixed Lucid TV group always sits directly under All Groups, whatever the group sort.
+        val lucidGroups = regular.filter { it.group.sourceId == VirtualChannels.SOURCE_ID }
+        val otherGroups = regular.filterNot { it.group.sourceId == VirtualChannels.SOURCE_ID }
+        val orderedRest = when (s.groupSort) {
+            "playlist" -> otherGroups
+            "name" -> otherGroups.sortedWith(
                 compareBy<LiveGroupSection>(
                     { g -> if (g.group.sourceId == null) -1 else if (s.groupPlaylistHeadings) playlistIndex[g.group.sourceId] ?: Int.MAX_VALUE else 0 },
                     { g -> g.group.title.lowercase() }
@@ -146,18 +156,18 @@ internal object LiveTvViewState {
             )
             // Your order (Reorder groups). A group you haven't placed yet (e.g. one just added in
             // the playlist) goes right after the group above it in the playlist.
-            else -> if (orderIndex.isEmpty()) regular else {
-                val result = regular.filter { it.group.id in orderIndex }.sortedBy { orderIndex[it.group.id] }.toMutableList()
-                regular.forEachIndexed { i, g ->
+            else -> if (orderIndex.isEmpty()) otherGroups else {
+                val result = otherGroups.filter { it.group.id in orderIndex }.sortedBy { orderIndex[it.group.id] }.toMutableList()
+                otherGroups.forEachIndexed { i, g ->
                     if (g.group.id !in orderIndex) {
-                        val above = if (i > 0) result.indexOfFirst { it.group.id == regular[i - 1].group.id } else -1
+                        val above = if (i > 0) result.indexOfFirst { it.group.id == otherGroups[i - 1].group.id } else -1
                         result.add(above + 1, g)
                     }
                 }
                 result
             }
         }
-        sections += orderedRegular
+        sections += lucidGroups + orderedRest
         val numbered = if (s.sequentialNumbers) {
             sections.map { sec -> sec.copy(channels = sec.channels.mapIndexed { i, c -> c.copy(number = i + 1) }) }
         } else sections

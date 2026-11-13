@@ -42,6 +42,8 @@
 - Catalogs marked as adult are hidden from Home by default.
 - Channels access for every Live TV source, including catch-up and recordings.
 - Multi-view for watching more than one channel at once.
+- **Lucid TV:** virtual channels built from add-on catalogs, series marathons and playlist
+  relays, with a generated guide and join-in-progress playback.
 
 ### 🏆 Sports
 - Scores, schedules and which of your channels are showing each game.
@@ -53,6 +55,9 @@
 - Home, Subscriptions, History, Playlists, Channels, Live, Music, Gaming, News, Sports and Shorts.
 - Search and play videos in the app's own player.
 - Info, More Videos and Comments panels on the player.
+- Last/Next video, Subscribe, Like/Dislike, Quality, and Watch later buttons, with playlists you
+  create in the app.
+- Resume playback, and progress reported to your YouTube account as well as kept on the device.
 - Auto-play the next video when one finishes.
 - YouTube videos in Continue Watching.
 

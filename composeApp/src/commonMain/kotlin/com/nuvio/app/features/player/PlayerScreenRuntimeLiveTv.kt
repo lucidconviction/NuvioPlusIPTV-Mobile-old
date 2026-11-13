@@ -1,14 +1,18 @@
 package com.nuvio.app.features.player
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.app.features.livetv.data.LiveTvRepository
 import com.nuvio.app.features.livetv.model.LiveChannel
 import com.nuvio.app.features.livetv.model.LiveTvClock
 import com.nuvio.app.features.livetv.player.LiveTvPlayback
+import com.nuvio.app.features.livetv.player.VirtualChannelPlayback
 import com.nuvio.app.features.livetv.ui.LiveTvPlayerOverlay
 import com.nuvio.app.features.livetv.ui.LiveTvViewState
+import com.nuvio.app.features.livetv.virtual.VirtualChannels
+import kotlinx.coroutines.launch
 
 /** Whether a Live TV channel (or a catch-up replay of one) is playing. */
 internal val PlayerScreenRuntime.isLiveTv: Boolean
@@ -31,10 +35,60 @@ internal fun PlayerScreenRuntime.liveLogoOr(fallback: String?): String? {
 
 /** Changes channel in place (the channel panel or a swipe), keeping the player open. */
 internal fun PlayerScreenRuntime.switchLiveChannel(channel: LiveChannel, nowTitle: String?) {
-    if (channel.key == activeVideoId && LiveTvPlayback.owns(activeProviderAddonId) && errorMessage == null) return
+    if (!VirtualChannels.isVirtualKey(channel.key) &&
+        channel.key == activeVideoId && LiveTvPlayback.owns(activeProviderAddonId) && errorMessage == null
+    ) return
+    if (VirtualChannels.isVirtualKey(channel.key)) {
+        // Lucid TV: resolve the item on now in the background, then swap it in. The last channel
+        // picked wins when the viewer zaps quickly.
+        addonCatalogPlayJob?.cancel()
+        addonCatalogPlayJob = null
+        virtualSwitchJob?.cancel()
+        virtualSwitchJob = scope.launch {
+            val resolved = VirtualChannelPlayback.resolve(channel, profileId)
+            if (resolved == null) {
+                com.nuvio.app.core.ui.NuvioToastController.show("This Lucid TV channel is offline right now")
+                return@launch
+            }
+            val tune = resolved.tune
+            flushWatchProgress()
+            credentialRefreshJob?.cancel()
+            errorMessage = null
+            externalSubtitles = emptyList()
+            activeSourceAudioUrl = null
+            activeSourceResponseHeaders = sanitizePlaybackResponseHeaders(resolved.stream.behaviorHints.proxyHeaders?.response)
+            // switchToSource adopts the stream's own add-on id and the previous position; Lucid TV
+            // puts its own live identity and the join offset back right afterwards.
+            activeSeasonNumber = tune.season
+            activeEpisodeNumber = tune.episode
+            switchToSource(resolved.stream, saveForReuse = false)
+            activeStreamTitle = channel.name
+            activeStreamSubtitle = tune.title
+            activePauseDescription = tune.item.description
+            activeProviderName = channel.sourceName
+            activeProviderAddonId = LiveTvPlayback.PROVIDER_ID
+            activeVideoId = channel.key
+            activeEpisodeTitle = tune.episodeTitle
+            activeEpisodeThumbnail = tune.item.poster
+            activeInitialPositionMs = tune.startOffsetMs
+            activeInitialProgressFraction = null
+            streamTransition = PlayerStreamTransition(
+                artwork = tune.item.backdrop?.takeIf { it.isNotBlank() }
+                    ?: tune.item.poster?.takeIf { it.isNotBlank() }
+                    ?: channel.thumbnail?.takeIf { it.isNotBlank() }
+                    ?: channel.logo?.takeIf { it.isNotBlank() }
+                    ?: background ?: poster,
+                logo = channel.logo?.takeIf { it.isNotBlank() } ?: logo,
+                title = channel.name,
+            )
+        }
+        return
+    }
     // A channel switch always wins over a slow add-on catalog lookup.
     addonCatalogPlayJob?.cancel()
     addonCatalogPlayJob = null
+    virtualSwitchJob?.cancel()
+    virtualSwitchJob = null
     val req = LiveTvPlayback.switchTo(channel)
     flushWatchProgress()
     credentialRefreshJob?.cancel()
@@ -100,6 +154,20 @@ internal fun PlayerScreenRuntime.incomingStreamTransition(): PlayerStreamTransit
 internal fun PlayerScreenRuntime.RenderLiveTvChannels() {
     if (!isLiveTvContent) return
     val isInPip = rememberIsInPictureInPicture()
+    // Lucid TV is a broadcast: at the end of a slot, tune the same channel into the next slot.
+    LaunchedEffect(activeVideoId, isLiveTv) {
+        val key = activeVideoId ?: return@LaunchedEffect
+        if (!isLiveTv || !VirtualChannels.isVirtualKey(key)) return@LaunchedEffect
+        while (true) {
+            kotlinx.coroutines.delay(15_000L)
+            val now = LiveTvClock.nowMs()
+            val tune = com.nuvio.app.features.livetv.virtual.VirtualChannelRepository.tune(key, now) ?: continue
+            if (now < tune.slotEndMs) continue
+            if (!playbackSnapshot.isPlaying && !playbackSnapshot.isEnded) continue
+            val channel = LiveTvViewState.list.value.visible.firstOrNull { it.key == key } ?: break
+            switchLiveChannel(channel, tune.title)
+        }
+    }
     LiveTvPlayerOverlay(
         currentKey = activeVideoId,
         controlsVisible = controlsVisible,

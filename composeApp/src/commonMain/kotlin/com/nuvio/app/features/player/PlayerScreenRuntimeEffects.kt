@@ -40,6 +40,7 @@ import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.hasLikelyExpiringPlaybackCredentials
 import com.nuvio.app.features.tracking.TrackingScrobbleAction
 import com.nuvio.app.features.watchprogress.WatchProgressRepository
+import com.nuvio.app.features.youtube.YouTubeHost
 import com.nuvio.app.features.watchprogress.buildPlaybackVideoId
 import com.nuvio.app.features.watching.application.WatchingState
 import kotlinx.coroutines.CancellationException
@@ -540,6 +541,16 @@ private fun PlayerScreenRuntime.BindPlayerUiVisibilityEffects() {
             isLoading = playbackSnapshot.isLoading,
             isEnded = playbackSnapshot.isEnded,
         )
+        // YouTube keeps its own account history as well as Nuvio's local progress.
+        if (contentType == "youtube" && playbackSnapshot.durationMs > 0) {
+            activeVideoId?.let { videoId ->
+                YouTubeHost.recordProgress?.invoke(
+                    "youtube:$videoId",
+                    playbackSnapshot.positionMs,
+                    playbackSnapshot.durationMs,
+                )
+            }
+        }
         if (playbackSnapshot.isPlaying) LiveTvPlayback.onPlaying(activeSourceUrl)
         if (playbackSnapshot.isEnded) {
             flushWatchProgress(TrackingScrobbleAction.STOP)

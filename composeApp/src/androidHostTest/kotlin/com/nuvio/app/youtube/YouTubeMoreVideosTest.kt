@@ -10,6 +10,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -70,6 +71,47 @@ class YouTubeMoreVideosTest {
                 onLoadReplies = onLoadReplies,
             )
         }
+    }
+
+    @Test
+    fun playerActionsPutLastAndNextAtTheEndsWithLikeDislikeSubscribeSaveAndQualityBetween() {
+        content(state = YtPlayerState(info = info, signedIn = true))
+
+        listOf(
+            "yt-previous-button",
+            "yt-info-button",
+            "yt-more-videos-button",
+            "yt-comments-button",
+            "yt-like-button",
+            "yt-dislike-button",
+            "yt-subscribe-button",
+            "yt-watch-later-button",
+            "yt-quality-button",
+            "yt-next-button",
+        ).forEach { tag ->
+            compose.onNodeWithTag(tag).assertExists()
+        }
+        compose.onNodeWithText("Subscribe").assertExists()
+        compose.onNodeWithText("Last").assertExists()
+        compose.onNodeWithText("Next").assertExists()
+    }
+
+    @Test
+    fun watchLaterOpensThePlaylistPicker() {
+        content(state = YtPlayerState(info = info, signedIn = true, playlists = emptyList()))
+
+        compose.onNodeWithTag("yt-watch-later-button").performScrollTo().performClick()
+
+        compose.onNodeWithText("Save to playlist").assertExists()
+        compose.onNodeWithText("New playlist").assertExists()
+    }
+
+    @Test
+    fun subscribeButtonUsesTheSignedInState() {
+        content(state = YtPlayerState(info = info.copy(subscribed = true), signedIn = true))
+
+        compose.onNodeWithTag("yt-subscribe-button").assertExists()
+        compose.onNodeWithText("Subscribed").assertExists()
     }
 
     @Test

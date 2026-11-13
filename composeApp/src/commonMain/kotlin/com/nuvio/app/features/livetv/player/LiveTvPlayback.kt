@@ -278,6 +278,8 @@ internal object LiveTvPlayback {
     fun fallbackFor(failedUrl: String): LiveFallback? {
         synchronized(lock) { catchups[failedUrl] }?.let { return catchupFallback(failedUrl, it) }
         val channel = synchronized(lock) { playing[failedUrl] } ?: return null
+        // Lucid TV resolves its own item; a same-name playlist channel isn't a backup for it.
+        if (com.nuvio.app.features.livetv.virtual.VirtualChannels.isVirtualKey(channel.key)) return null
         // 1. Xtream HLS that won't play: the same channel as TS, once.
         val ts = synchronized(lock) {
             if (channel.key in tsInstead) null

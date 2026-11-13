@@ -758,6 +758,25 @@ class YouTubeViewModel (private val context: Context, autoSelect: Boolean = true
         return fromList ?: withContext(Dispatchers.IO) { runCatching { upNext(currentVideoId) }.getOrNull() }
     }
 
+    /** The video before [currentVideoId] in the list it was opened from; null at the start. */
+    fun playPrevious(currentVideoId: String, onReady: (YtPlayable) -> Unit, onNone: () -> Unit) {
+        viewModelScope.launch {
+            val index = playQueue.indexOfFirst { it.videoId == currentVideoId }
+            val previous = if (index > 0) {
+                playQueue.subList(0, index).lastOrNull { it.kind == YtKind.VIDEO && !it.isLive }
+            } else null
+            if (previous == null) {
+                onNone()
+                return@launch
+            }
+            val startMs = resumeMs(previous)
+            lookup(previous).await().fold(
+                onSuccess = { onReady(it.copy(startPositionMs = startMs)) },
+                onFailure = { onNone() },
+            )
+        }
+    }
+
     /**
      * Plays the video after [currentVideoId], and calls [onReady] with it on the main thread, or
      * [onNone] if there isn't one. Used when a video ends and autoplay is on.
@@ -789,6 +808,7 @@ class YouTubeViewModel (private val context: Context, autoSelect: Boolean = true
 
     /** Where to start: if your account says you stopped part-way through, resume from there. */
     private fun resumeMs(item: YtItem): Long {
+        if (!YouTubeSettings.resumePlayback(context)) return 0L
         val durationMs = item.source.durationMs
         if (item.isLive || durationMs <= 0) return 0L
         // This device's own place wins (nearly finished or barely started means from the top); then the account's.
