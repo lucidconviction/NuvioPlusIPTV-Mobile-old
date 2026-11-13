@@ -242,6 +242,8 @@ internal object LiveTvKeys {
     const val virtualChannels = "virtual_channels"
     /** Lucid TV: cached pool snapshots per virtual channel (synced; lets a cold start show a guide). */
     const val virtualPools = "virtual_pools"
+    /** Lucid TV: HTTP/debrid and prefetch preferences (this device only). */
+    const val virtualSettings = "virtual_settings"
 
     /** Separates the EPG source id from the channel id in a stored EPG assignment. */
     const val EPG_SEP = "\u0001"
@@ -713,6 +715,21 @@ internal open class LiveTvPreferencesStore {
         edit { p ->
             if (json.isNullOrBlank()) p.remove(LiveTvKeys.virtualPools)
             else p[LiveTvKeys.virtualPools] = PrefValue.Str(json)
+        }
+    }
+
+    /** Lucid TV: HTTP/debrid and prefetch preferences, this device only. */
+    fun currentVirtualSettingsJson(): String? = _device.value.str(LiveTvKeys.virtualSettings)
+
+    val virtualSettingsJson: StateFlow<String?> = _device
+        .map { it.str(LiveTvKeys.virtualSettings) }
+        .distinctUntilChanged()
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    fun setVirtualSettingsJson(json: String?) {
+        editDevice { p ->
+            if (json.isNullOrBlank()) p.remove(LiveTvKeys.virtualSettings)
+            else p[LiveTvKeys.virtualSettings] = PrefValue.Str(json)
         }
     }
 

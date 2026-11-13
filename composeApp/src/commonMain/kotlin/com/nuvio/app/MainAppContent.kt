@@ -159,6 +159,7 @@ import com.nuvio.app.features.livetv.ui.RecordingsScreen
 import com.nuvio.app.features.livetv.ui.LiveTvManageScreen
 import com.nuvio.app.features.livetv.ui.virtual.VirtualChannelEditorScreen
 import com.nuvio.app.features.livetv.ui.virtual.VirtualChannelsScreen
+import com.nuvio.app.features.livetv.ui.virtual.VirtualTuningScreen
 import com.nuvio.app.features.livetv.ui.multiview.LiveTvMultiViewScreen
 import com.nuvio.app.features.livetv.ui.multiview.MultiViewQuickNavBadge
 import com.nuvio.app.features.livetv.ui.multiview.MultiViewRepository
@@ -947,15 +948,15 @@ internal fun MainAppContent(
 
         fun openLiveChannel(channel: LiveChannel, nowTitle: String?) {
             if (VirtualChannels.isVirtualKey(channel.key)) {
-                coroutineScope.launch {
-                    NuvioToastController.show("Tuning ${channel.name}…")
-                    val launchId = VirtualChannelPlayback.prepare(channel, activePlaybackProfileId)
-                    if (launchId == null) {
-                        NuvioToastController.show(lucidTvChannelOffline)
-                        return@launch
-                    }
-                    navController.navigate(PlayerRoute(launchId = launchId, title = channel.name))
-                }
+                navController.navigate(
+                    LiveTvVirtualTuneRoute(
+                        channelKey = channel.key,
+                        profileId = activePlaybackProfileId,
+                        channelName = channel.name,
+                        channelLogo = channel.logo,
+                        title = channel.name,
+                    )
+                ) { launchSingleTop = true }
                 return
             }
             val launchId = LiveTvPlayback.prepare(channel, activePlaybackProfileId, nowTitle)
@@ -1293,9 +1294,10 @@ internal fun MainAppContent(
         fun addLiveChannelToMultiView(channel: LiveChannel) {
             if (VirtualChannels.isVirtualKey(channel.key)) {
                 coroutineScope.launch {
-                    val resolved = VirtualChannelPlayback.resolve(channel, activePlaybackProfileId)
+                    val outcome = VirtualChannelPlayback.resolve(channel, activePlaybackProfileId)
+                    val resolved = outcome.resolved
                     if (resolved == null) {
-                        NuvioToastController.show(lucidTvChannelOffline)
+                        NuvioToastController.show(outcome.message ?: lucidTvChannelOffline)
                         return@launch
                     }
                     val added = MultiViewRepository.add(
@@ -2094,6 +2096,22 @@ internal fun MainAppContent(
                         },
                         onEditChannel = { id ->
                             navController.navigate(LiveTvVirtualChannelEditorRoute(channelId = id, title = "Lucid TV")) { launchSingleTop = true }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                entry<LiveTvVirtualTuneRoute> { route ->
+                    val onBack = rememberGuardedPopBackStack(navController, route)
+                    VirtualTuningScreen(
+                        channelKey = route.channelKey,
+                        profileId = route.profileId,
+                        channelName = route.channelName,
+                        channelLogo = route.channelLogo,
+                        onBack = onBack,
+                        onReady = { launchId, title ->
+                            navController.navigate(PlayerRoute(launchId = launchId, title = title)) {
+                                popUpTo<LiveTvVirtualTuneRoute> { inclusive = true }
+                            }
                         },
                         modifier = Modifier.fillMaxSize(),
                     )

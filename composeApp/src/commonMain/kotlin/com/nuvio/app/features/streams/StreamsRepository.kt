@@ -80,6 +80,60 @@ object StreamsRepository {
         }
     }
 
+    /**
+     * All stream candidates for a request, not just the auto-play winner. Lucid TV uses this to
+     * try direct HTTP first, then server/debrid sources, and to keep the rest for fallback.
+     */
+    suspend fun resolveStreamCandidates(
+        type: String,
+        videoId: String,
+        parentMetaId: String? = null,
+        season: Int? = null,
+        episode: Int? = null,
+        timeoutMs: Long = 25_000L,
+        forceRefresh: Boolean = false,
+    ): List<StreamItem> {
+        if (forceRefresh) {
+            reload(
+                type = type,
+                videoId = videoId,
+                parentMetaId = parentMetaId,
+                season = season,
+                episode = episode,
+                manualSelection = false,
+                forceAutoPlay = true,
+            )
+        } else {
+            load(
+                type = type,
+                videoId = videoId,
+                parentMetaId = parentMetaId,
+                season = season,
+                episode = episode,
+                manualSelection = false,
+                forceAutoPlay = true,
+                forceRefresh = false,
+            )
+        }
+        val state = withTimeoutOrNull(timeoutMs) {
+            _uiState.first { current ->
+                current.autoPlayStream != null ||
+                    (!current.isAnyLoading && !current.isDirectAutoPlayFlow)
+            }
+        } ?: _uiState.value
+        return state.groups
+            .flatMap { it.streams }
+            .distinctBy { stream ->
+                listOf(
+                    stream.addonId,
+                    stream.url.orEmpty(),
+                    stream.infoHash.orEmpty(),
+                    stream.name.orEmpty(),
+                    stream.behaviorHints.filename.orEmpty(),
+                ).joinToString("|")
+            }
+    }
+
     fun load(type: String, videoId: String, parentMetaId: String? = null, season: Int? = null, episode: Int? = null, manualSelection: Boolean = false, forceAutoPlay: Boolean = false) {
         PluginRepository.setLocalPluginSearchPaused(false)
         load(

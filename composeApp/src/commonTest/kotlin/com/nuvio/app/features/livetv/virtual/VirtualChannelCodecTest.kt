@@ -143,4 +143,15 @@ class VirtualChannelCodecTest {
         assertEquals("A", restored.items.single().title)
         assertEquals(1_763_000_000_000L, restored.fetchedAtMs)
     }
+
+    @Test
+    fun playbackSettingsRoundTripAndClampPrefetch() {
+        val encoded = VirtualChannelCodec.encodePlaybackSettings(
+            VirtualPlaybackSettings(allowDebrid = false, prefetchNext = 9)
+        )
+        val decoded = VirtualChannelCodec.decodePlaybackSettings(encoded)
+        assertEquals(false, decoded.allowDebrid)
+        assertEquals(VirtualPlaybackSettings.MAX_PREFETCH, decoded.prefetchNext)
+        assertEquals(VirtualPlaybackSettings(), VirtualChannelCodec.decodePlaybackSettings(null))
+    }
 }

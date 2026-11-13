@@ -29,6 +29,9 @@ import com.nuvio.app.features.details.MetaDetailsRepository
 import com.nuvio.app.core.ui.LocalFold
 import com.nuvio.app.features.livetv.ui.multiview.MultiViewRepository
 import com.nuvio.app.features.livetv.ui.multiview.MultiViewStream
+import com.nuvio.app.features.livetv.player.LiveTvPlayback
+import com.nuvio.app.features.livetv.player.VirtualChannelPlayback
+import com.nuvio.app.features.livetv.virtual.VirtualChannels
 import com.nuvio.app.features.p2p.P2pStreamingState
 import com.nuvio.app.features.party.PartyRepository
 import com.nuvio.app.features.p2p.formatP2pMegabytes
@@ -276,6 +279,13 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi() {
                             scrubbingPositionMs = null
                             controlsVisible = !playerControlsLocked
                             removeFailedStreamFromCache()
+                            val virtualKey = activeVideoId
+                            if (activeProviderAddonId == LiveTvPlayback.PROVIDER_ID &&
+                                virtualKey != null &&
+                                VirtualChannels.isVirtualKey(virtualKey)
+                            ) {
+                                scope.launch { VirtualChannelPlayback.invalidate(virtualKey, activeStream) }
+                            }
                         }
                     },
                 )

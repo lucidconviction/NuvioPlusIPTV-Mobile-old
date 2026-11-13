@@ -254,8 +254,26 @@ object VirtualChannelCodec {
         }.getOrDefault(emptyMap())
     }
 
-    // ------------------------------------------------------------------ playout
+    // ------------------------------------------------------------------ settings
 
+    fun encodePlaybackSettings(settings: VirtualPlaybackSettings): String = buildJsonObject {
+        put("allowDebrid", settings.allowDebrid)
+        put("prefetchNext", settings.prefetchNext)
+    }.toString()
+
+    fun decodePlaybackSettings(raw: String?): VirtualPlaybackSettings {
+        if (raw.isNullOrBlank()) return VirtualPlaybackSettings()
+        return runCatching {
+            val o = parseObject(raw)
+            VirtualPlaybackSettings(
+                allowDebrid = o.optBoolean("allowDebrid", true),
+                prefetchNext = o.optInt("prefetchNext", 2)
+                    .coerceIn(VirtualPlaybackSettings.MIN_PREFETCH, VirtualPlaybackSettings.MAX_PREFETCH),
+            )
+        }.getOrDefault(VirtualPlaybackSettings())
+    }
+
+    // ------------------------------------------------------------------ playout
     private fun encodePoolRules(rules: VirtualPoolRules): JsonObject = buildJsonObject {
         put("maxItems", rules.maxItems)
         put("refreshHours", rules.refreshHours)

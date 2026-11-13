@@ -51,6 +51,9 @@ internal object VirtualChannelRepository {
     private val _errors = MutableStateFlow<Map<String, String>>(emptyMap())
     val errors: StateFlow<Map<String, String>> = _errors.asStateFlow()
 
+    private val _settings = MutableStateFlow(VirtualPlaybackSettings())
+    val settings: StateFlow<VirtualPlaybackSettings> = _settings.asStateFlow()
+
     private val _refreshing = MutableStateFlow<Set<String>>(emptySet())
     val refreshing: StateFlow<Set<String>> = _refreshing.asStateFlow()
 
@@ -60,6 +63,7 @@ internal object VirtualChannelRepository {
     private var tickerStarted = false
     private var playlistObserverStarted = false
     private var specsObserverStarted = false
+    private var settingsObserverStarted = false
 
     // ---------------------------------------------------------------- lifecycle
 
@@ -71,6 +75,7 @@ internal object VirtualChannelRepository {
             _specs.value = normalized
             if (normalized != stored) persistSpecs()
             _pools.value = codec.decodePools(prefs.currentVirtualPoolsJson())
+            _settings.value = codec.decodePlaybackSettings(prefs.currentVirtualSettingsJson())
             rebuildChannels()
             rebuildWindow()
             refreshStale(forceEmpty = true)
@@ -99,8 +104,7 @@ internal object VirtualChannelRepository {
             }
         }
         if (!specsObserverStarted) {
-            specsObserverStarted = true
-            // A backup restore or Drive sync can replace the whole channel list; pick it up.
+            specsObserverStarted = true            // A backup restore or Drive sync can replace the whole channel list; pick it up.
             scope.launch {
                 prefs.virtualChannelsJson.collect { raw ->
                     val stored = codec.decodeSpecs(raw)
@@ -117,10 +121,28 @@ internal object VirtualChannelRepository {
                 }
             }
         }
+        if (!settingsObserverStarted) {
+            settingsObserverStarted = true
+            scope.launch {
+                prefs.virtualSettingsJson.collect { raw ->
+                    _settings.value = codec.decodePlaybackSettings(raw)
+                }
+            }
+        }
     }
-
-    /** True when at least one Lucid TV channel is defined (Live TV's empty state uses this). */
     fun hasChannels(): Boolean = _specs.value.isNotEmpty()
+
+    /** Saves the HTTP/debrid and prefetch choices. */
+    fun updateSettings(settings: VirtualPlaybackSettings) {
+        val clean = settings.copy(
+            prefetchNext = settings.prefetchNext.coerceIn(
+                VirtualPlaybackSettings.MIN_PREFETCH,
+                VirtualPlaybackSettings.MAX_PREFETCH,
+            ),
+        )
+        _settings.value = clean
+        prefs.setVirtualSettingsJson(codec.encodePlaybackSettings(clean))
+    }
 
     /** Regenerates the near-term guide window (called when Live TV refreshes). */
     fun refreshWindow() {
@@ -348,7 +370,7 @@ internal object VirtualChannelRepository {
         }
         return items
             .filter { source.contentType.isBlank() || it.type.isBlank() || it.type.equals(source.contentType, ignoreCase = true) }
-            .map(::itemOf)
+            .map { item -> itemOf(item, source.contentType) }
     }
 
     private suspend fun fetchRulesPool(source: VirtualSource.Rules, spec: VirtualChannelSpec): List<VirtualItem> {
@@ -377,16 +399,16 @@ internal object VirtualChannelRepository {
                         maxItems = (spec.pool.maxItems - out.size).coerceAtMost(150),
                     ).items
                 }.getOrDefault(emptyList())
-                out += items.map(::itemOf)
+                out += items.map { item -> itemOf(item, source.contentType) }
             }
             if (out.size >= spec.pool.maxItems) break
         }
         return out
     }
 
-    private fun itemOf(item: MetaPreview): VirtualItem = VirtualItem(
+    private fun itemOf(item: MetaPreview, defaultType: String = ""): VirtualItem = VirtualItem(
         id = item.id,
-        type = item.type,
+        type = item.type.ifBlank { defaultType },
         title = item.name,
         poster = item.poster,
         backdrop = item.banner ?: item.landscapePoster,
@@ -642,6 +664,94 @@ internal object VirtualChannelRepository {
             label.isBlank() -> "${item.title} · ${item.episodeTitle}"
             else -> "${item.title} · $label · ${item.episodeTitle}"
         }
+    }
+
+    /**
+     * The next [count] items after [fromMs], for prefetching. Mirrors [tune] but does not resolve
+     * streams; the playback cache does that in the background.
+     */
+    suspend fun upcomingTunes(
+        channelKey: String,
+        fromMs: Long = LiveTvClock.nowMs(),
+        count: Int = VirtualPlaybackSettings().prefetchNext,
+    ): List<VirtualTune> {
+        val id = VirtualChannels.specIdOf(channelKey) ?: return emptyList()
+        val spec = _specs.value.firstOrNull { it.id == id && it.enabled } ?: return emptyList()
+        val items = _pools.value[spec.id]?.items.orEmpty()
+        if (items.isEmpty() || count <= 0) return emptyList()
+        val slotMs = spec.rotationMinutes.coerceAtLeast(1) * 60_000L
+        val out = ArrayList<VirtualTune>(count)
+
+        if (spec.playout.mode == VirtualPlayoutMode.LOOP) {
+            val current = VirtualSchedule.playoutAt(fromMs, spec.playout.anchorMs, items, slotMs)
+                ?: return emptyList()
+            val durations = VirtualSchedule.durationsOf(items, slotMs)
+            val cycle = durations.sum().coerceAtLeast(1L)
+            var offset = VirtualSchedule.floorMod(current.startMs - spec.playout.anchorMs, cycle)
+            var index = 0
+            var accumulated = 0L
+            while (index < items.lastIndex && offset >= accumulated + durations[index]) {
+                accumulated += durations[index]
+                index++
+            }
+            var cursor = current.endMs
+            repeat(count) {
+                index = (index + 1) % items.size
+                val item = items[index]
+                val duration = durations[index]
+                out += tuneOf(
+                    spec = spec,
+                    channelKey = channelKey,
+                    item = item,
+                    startMs = cursor,
+                    endMs = cursor + duration,
+                    startOffsetMs = 0L,
+                )
+                cursor += duration
+            }
+        } else {
+            var slot = VirtualSchedule.slotAt(fromMs, channelKey, slotMs)
+            repeat(count) {
+                slot = VirtualSchedule.RotateSlot(slot.number + 1, slot.endMs, slot.endMs + slotMs)
+                var item = VirtualSchedule.itemForSlot(channelKey, slot, items, spec.playout.salt) ?: return@repeat
+                if (item.type == "series" && item.season == null) {
+                    resolveEpisode(spec, item, slot.number)?.let { item = it }
+                }
+                out += tuneOf(
+                    spec = spec,
+                    channelKey = channelKey,
+                    item = item,
+                    startMs = slot.startMs,
+                    endMs = slot.endMs,
+                    startOffsetMs = 0L,
+                )
+            }
+        }
+        return out
+    }
+
+    private fun tuneOf(
+        spec: VirtualChannelSpec,
+        channelKey: String,
+        item: VirtualItem,
+        startMs: Long,
+        endMs: Long,
+        startOffsetMs: Long,
+    ): VirtualTune {
+        val relay = item.streamUrl != null
+        return VirtualTune(
+            channelKey = channelKey,
+            specId = spec.id,
+            item = item,
+            season = item.season,
+            episode = item.episode,
+            episodeTitle = item.episodeTitle,
+            title = tuneTitle(item),
+            startOffsetMs = if (relay) 0L else startOffsetMs,
+            slotStartMs = startMs,
+            slotEndMs = endMs,
+            relay = relay,
+        )
     }
 
     private suspend fun resolveEpisode(spec: VirtualChannelSpec, series: VirtualItem, slotNumber: Long): VirtualItem? {

@@ -179,6 +179,21 @@ data class LiveTvVirtualChannelsRoute(override val title: String = "") : AppRout
 }
 
 @Serializable
+data class LiveTvVirtualTuneRoute(
+    val channelKey: String,
+    val profileId: Int,
+    val channelName: String,
+    val channelLogo: String? = null,
+    override val title: String = "",
+) : AppRoute {
+    override val preferredTabName: String
+        get() = "LiveTv"
+
+    override val hidesNavigationBar: Boolean
+        get() = true
+}
+
+@Serializable
 data class LiveTvVirtualChannelEditorRoute(
     val channelId: String? = null,
     val manifestUrl: String? = null,

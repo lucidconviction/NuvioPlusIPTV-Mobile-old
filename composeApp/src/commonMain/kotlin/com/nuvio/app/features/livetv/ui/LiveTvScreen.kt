@@ -250,7 +250,14 @@ fun LiveTvScreen(
     val sportsSettings by remember { SportsRepository.start(); SportsRepository.settings }.collectAsStateWithLifecycle()
     val sportsOn = sportsSettings.showInSidebar
     val addonUiState by AddonRepository.uiState.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { runCatching { AddonRepository.initialize() } }
+    LaunchedEffect(Unit) {
+        runCatching { AddonRepository.initialize() }
+        // Warm the last Lucid TV channel so opening it is immediate.
+        val last = LiveTvPreferences.currentUserState().lastChannelKey
+        if (com.nuvio.app.features.livetv.virtual.VirtualChannels.isVirtualKey(last)) {
+            com.nuvio.app.features.livetv.player.VirtualChannelPlayback.prefetchCurrent(last!!)
+        }
+    }
     val state by remember {
         LiveTvRepository.ensureLoaded()
         LiveTvViewState.list

@@ -43,7 +43,8 @@
 - Channels access for every Live TV source, including catch-up and recordings.
 - Multi-view for watching more than one channel at once.
 - **Lucid TV:** virtual channels built from add-on catalogs, series marathons and playlist
-  relays, with a generated guide and join-in-progress playback.
+  relays, with a generated guide, join-in-progress playback, HTTP-first tuning, optional debrid
+  and next-2 prefetch.
 
 ### 🏆 Sports
 - Scores, schedules and which of your channels are showing each game.

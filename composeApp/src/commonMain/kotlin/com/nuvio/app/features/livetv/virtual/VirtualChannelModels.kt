@@ -129,6 +129,19 @@ data class VirtualJoin(
     val jitter: Boolean = true,
 )
 
+/** How Lucid TV turns a channel into a stream. Direct HTTP is always tried first. */
+data class VirtualPlaybackSettings(
+    /** When no direct stream is available, allow debrid/torrent sources to be resolved. */
+    val allowDebrid: Boolean = true,
+    /** How many upcoming items to resolve in the background (0–4). */
+    val prefetchNext: Int = 2,
+) {
+    companion object {
+        const val MIN_PREFETCH = 0
+        const val MAX_PREFETCH = 4
+    }
+}
+
 data class VirtualChannelSpec(
     val id: String,
     val name: String,

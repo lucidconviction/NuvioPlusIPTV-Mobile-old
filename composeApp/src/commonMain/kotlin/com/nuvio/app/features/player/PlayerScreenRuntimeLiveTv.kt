@@ -44,10 +44,21 @@ internal fun PlayerScreenRuntime.switchLiveChannel(channel: LiveChannel, nowTitl
         addonCatalogPlayJob?.cancel()
         addonCatalogPlayJob = null
         virtualSwitchJob?.cancel()
+        // Show the channel name/logo while the item resolves, like a tuner.
+        streamTransition = PlayerStreamTransition(
+            artwork = channel.thumbnail?.takeIf { it.isNotBlank() }
+                ?: channel.logo?.takeIf { it.isNotBlank() }
+                ?: background ?: poster,
+            logo = channel.logo?.takeIf { it.isNotBlank() } ?: logo,
+            title = channel.name,
+        )
         virtualSwitchJob = scope.launch {
-            val resolved = VirtualChannelPlayback.resolve(channel, profileId)
+            val outcome = VirtualChannelPlayback.resolve(channel, profileId)
+            val resolved = outcome.resolved
             if (resolved == null) {
-                com.nuvio.app.core.ui.NuvioToastController.show("This Lucid TV channel is offline right now")
+                com.nuvio.app.core.ui.NuvioToastController.show(
+                    outcome.message ?: "This Lucid TV channel is offline right now"
+                )
                 return@launch
             }
             val tune = resolved.tune
@@ -154,17 +165,25 @@ internal fun PlayerScreenRuntime.incomingStreamTransition(): PlayerStreamTransit
 internal fun PlayerScreenRuntime.RenderLiveTvChannels() {
     if (!isLiveTvContent) return
     val isInPip = rememberIsInPictureInPicture()
-    // Lucid TV is a broadcast: at the end of a slot, tune the same channel into the next slot.
+    // Lucid TV is a broadcast: warm the current item and the next two, then tune at the boundary.
     LaunchedEffect(activeVideoId, isLiveTv) {
         val key = activeVideoId ?: return@LaunchedEffect
         if (!isLiveTv || !VirtualChannels.isVirtualKey(key)) return@LaunchedEffect
+        scope.launch { VirtualChannelPlayback.prefetchCurrent(key) }
+        var prefetchedSlotStart = Long.MIN_VALUE
         while (true) {
             kotlinx.coroutines.delay(15_000L)
             val now = LiveTvClock.nowMs()
             val tune = com.nuvio.app.features.livetv.virtual.VirtualChannelRepository.tune(key, now) ?: continue
+            // Resolve the next two items shortly before the slot changes.
+            if (now >= tune.slotEndMs - 30_000L && tune.slotStartMs != prefetchedSlotStart) {
+                prefetchedSlotStart = tune.slotStartMs
+                scope.launch { VirtualChannelPlayback.prefetch(key, now) }
+            }
             if (now < tune.slotEndMs) continue
             if (!playbackSnapshot.isPlaying && !playbackSnapshot.isEnded) continue
             val channel = LiveTvViewState.list.value.visible.firstOrNull { it.key == key } ?: break
+            prefetchedSlotStart = Long.MIN_VALUE
             switchLiveChannel(channel, tune.title)
         }
     }

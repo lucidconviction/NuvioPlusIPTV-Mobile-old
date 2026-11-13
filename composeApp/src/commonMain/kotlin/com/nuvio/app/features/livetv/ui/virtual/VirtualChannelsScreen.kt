@@ -25,6 +25,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,6 +46,7 @@ import com.nuvio.app.core.ui.DialogButton
 import com.nuvio.app.core.ui.DialogButtonStyle
 import com.nuvio.app.core.ui.DialogButtons
 import com.nuvio.app.core.ui.DialogSurface
+import com.nuvio.app.core.ui.Chip
 import com.nuvio.app.core.ui.Menu
 import com.nuvio.app.core.ui.MenuItem
 import com.nuvio.app.core.ui.NuvioScreenHeader
@@ -98,9 +100,11 @@ fun VirtualChannelsScreen(
     val refreshing by VirtualChannelRepository.refreshing.collectAsStateWithLifecycle()
     val errors by VirtualChannelRepository.errors.collectAsStateWithLifecycle()
     val programs by VirtualChannelRepository.programsWindow.collectAsStateWithLifecycle()
+    val playbackSettings by VirtualChannelRepository.settings.collectAsStateWithLifecycle()
     var menu by remember { mutableStateOf(false) }
     var importing by remember { mutableStateOf(false) }
     var exporting by remember { mutableStateOf(false) }
+    var showPlaybackSettings by remember { mutableStateOf(false) }
     var exportText by remember { mutableStateOf("") }
     var importText by remember { mutableStateOf("") }
     var importMessage by remember { mutableStateOf<String?>(null) }
@@ -142,6 +146,10 @@ fun VirtualChannelsScreen(
                         menu = false
                         exportText = VirtualChannelRepository.exportPack()
                         exporting = true
+                    })
+                    MenuItem(text = "Playback settings", onClick = {
+                        menu = false
+                        showPlaybackSettings = true
                     })
                 }
             },
@@ -278,6 +286,73 @@ fun VirtualChannelsScreen(
                         VirtualChannelRepository.delete(spec.id)
                         deleteTarget = null
                     },
+                )
+            }
+        }
+    }
+
+    if (showPlaybackSettings) {
+        DialogSurface(
+            onDismissRequest = { showPlaybackSettings = false },
+            title = "Lucid TV playback",
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable {
+                    VirtualChannelRepository.updateSettings(
+                        playbackSettings.copy(allowDebrid = !playbackSettings.allowDebrid)
+                    )
+                },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s12),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Use debrid when needed",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = tokens.colors.textPrimary,
+                    )
+                    Text(
+                        text = "Direct HTTP streams are always tried first. Debrid/torrent sources are used only when no direct stream is available.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = tokens.colors.textMuted,
+                    )
+                }
+                Switch(
+                    checked = playbackSettings.allowDebrid,
+                    onCheckedChange = { on ->
+                        VirtualChannelRepository.updateSettings(playbackSettings.copy(allowDebrid = on))
+                    },
+                )
+            }
+            Text(
+                text = "Prefetch next items",
+                style = MaterialTheme.typography.labelMedium,
+                color = tokens.colors.textMuted,
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s6),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                listOf(0, 1, 2, 3, 4).forEach { count ->
+                    Chip(
+                        label = if (count == 0) "Off" else count.toString(),
+                        selected = playbackSettings.prefetchNext == count,
+                        onClick = {
+                            VirtualChannelRepository.updateSettings(playbackSettings.copy(prefetchNext = count))
+                        },
+                    )
+                }
+            }
+            Text(
+                text = "The next items are resolved in the background so channel changes and slot rollovers start faster.",
+                style = MaterialTheme.typography.bodySmall,
+                color = tokens.colors.textMuted,
+            )
+            DialogButtons {
+                DialogButton(
+                    text = "Done",
+                    style = DialogButtonStyle.Primary,
+                    onClick = { showPlaybackSettings = false },
                 )
             }
         }
