@@ -425,11 +425,15 @@ fun VirtualChannelEditorScreen(
                     if (name.isBlank()) name = seriesItem.name
                 } else {
                     source = catalogSource
-                    kind = if (catalogSource.contentType == "series") VirtualChannelKind.ADDON_SERIES else VirtualChannelKind.ADDON_ROTATE
+                    val seriesCatalog = catalogSource.contentType == "series"
+                    kind = if (seriesCatalog) VirtualChannelKind.ADDON_SERIES else VirtualChannelKind.ADDON_ROTATE
                     playout = playout.copy(
-                        mode = VirtualPlayoutMode.ROTATE,
-                        slotMinutes = if (catalogSource.contentType == "series") 45 else 90,
+                        // A series catalog is expanded into episodes. Running it as a LOOP makes
+                        // the guide use each episode's real runtime instead of a fixed block.
+                        mode = if (seriesCatalog) VirtualPlayoutMode.LOOP else VirtualPlayoutMode.ROTATE,
+                        slotMinutes = if (seriesCatalog) 45 else 90,
                         seriesSlotMinutes = 45,
+                        order = if (seriesCatalog) VirtualOrder.AIR else playout.order,
                     )
                     join = join.copy(maxStartPercent = -1)
                     if (name.isBlank()) {

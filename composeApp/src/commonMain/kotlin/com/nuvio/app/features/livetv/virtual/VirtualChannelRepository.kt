@@ -15,6 +15,9 @@ import com.nuvio.app.features.livetv.model.LiveTvClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -74,7 +77,10 @@ internal object VirtualChannelRepository {
             val normalized = normalizeSpecs(stored)
             _specs.value = normalized
             if (normalized != stored) persistSpecs()
-            _pools.value = codec.decodePools(prefs.currentVirtualPoolsJson())
+            val decodedPools = codec.decodePools(prefs.currentVirtualPoolsJson())
+            val repairedPools = repairPools(decodedPools, normalized)
+            _pools.value = repairedPools
+            if (repairedPools != decodedPools) persistPools()
             _settings.value = codec.decodePlaybackSettings(prefs.currentVirtualSettingsJson())
             rebuildChannels()
             rebuildWindow()
@@ -295,7 +301,22 @@ internal object VirtualChannelRepository {
                         val details = MetaDetailsRepository.fetch(source.itemType, source.itemId) ?: return@withContext emptyList()
                         episodesOf(details)
                     }
-                    VirtualChannelKind.COLLECTION_LOOP, VirtualChannelKind.ADDON_ROTATE -> {
+                    VirtualChannelKind.COLLECTION_LOOP -> {
+                        val details = MetaDetailsRepository.fetch(source.itemType, source.itemId)
+                        when {
+                            details == null -> listOf(
+                                VirtualItem(
+                                    id = source.itemId,
+                                    streamId = source.itemId,
+                                    type = source.itemType,
+                                    title = source.itemId,
+                                )
+                            )
+                            source.itemType == "series" -> episodesOf(details)
+                            else -> listOf(itemOf(details, source.itemType))
+                        }
+                    }
+                    VirtualChannelKind.ADDON_ROTATE -> {
                         val details = MetaDetailsRepository.fetch(source.itemType, source.itemId)
                         if (details != null && source.itemType == "series") {
                             listOf(seriesItemOf(details))
@@ -348,7 +369,14 @@ internal object VirtualChannelRepository {
         var skip: Int? = 0
         var pages = 0
         val cap = spec.pool.maxItems.coerceIn(1, 10_000)
-        while (skip != null && items.size < cap && pages < MAX_CATALOG_PAGES) {
+        // A series catalog is expanded into episodes. Fetching hundreds of shows would be
+        // pointless: only the first few fill the pool with episodes.
+        val previewCap = if (source.contentType.equals("series", true)) {
+            minOf(cap, MAX_SERIES_TO_EXPAND)
+        } else {
+            cap
+        }
+        while (skip != null && items.size < previewCap && pages < MAX_CATALOG_PAGES) {
             val page = runCatching {
                 fetchCatalogPage(
                     manifestUrl = source.manifestUrl,
@@ -356,7 +384,7 @@ internal object VirtualChannelRepository {
                     catalogId = source.catalogId,
                     genre = source.genre,
                     skip = skip,
-                    maxItems = (cap - items.size).coerceAtMost(100),
+                    maxItems = (previewCap - items.size).coerceAtMost(100),
                 )
             }.getOrElse { error ->
                 if (items.isEmpty()) throw error
@@ -369,9 +397,43 @@ internal object VirtualChannelRepository {
             skip = next
             pages++
         }
-        return items
+        val previews = items
             .filter { source.contentType.isBlank() || it.type.isBlank() || it.type.equals(source.contentType, ignoreCase = true) }
             .map { item -> itemOf(item, source.contentType) }
+        val hasSeries = previews.any { it.type.equals("series", true) }
+        return if (hasSeries) expandSeriesItems(previews) else previews
+    }
+
+    /**
+     * A series is not playable without an episode. Expand series catalog entries into their
+     * episodes here, so both the guide and the player use the episode id, title and runtime.
+     */
+    private suspend fun expandSeriesItems(previews: List<VirtualItem>): List<VirtualItem> {
+        val series = previews.filter { it.type.equals("series", true) }.take(MAX_SERIES_TO_EXPAND)
+        if (series.isEmpty()) return previews
+        val details = coroutineScope {
+            series.map { item ->
+                async {
+                    item to runCatching { MetaDetailsRepository.fetch("series", item.id) }
+                        .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+                        .getOrNull()
+                }
+            }.awaitAll()
+        }
+        val byId = details.toMap()
+        val out = ArrayList<VirtualItem>(previews.size)
+        previews.forEach { preview ->
+            if (!preview.type.equals("series", true)) {
+                out += preview
+                return@forEach
+            }
+            val meta = byId[preview]
+            val episodes = meta?.let(::episodesOf)
+                ?.take(MAX_EPISODES_PER_SERIES)
+                .orEmpty()
+            if (episodes.isEmpty()) out += preview else out += episodes
+        }
+        return out
     }
 
     private suspend fun fetchRulesPool(source: VirtualSource.Rules, spec: VirtualChannelSpec): List<VirtualItem> {
@@ -466,7 +528,9 @@ internal object VirtualChannelRepository {
             ?: "${details.id}:$season:$episode"
         return VirtualItem(
             id = id,
-            streamId = details.id,
+            // Stream add-ons build /stream/series/<videoId>.json. For episodes that id must be
+            // the episode id ("tt123:1:1"); the parent series id only belongs in parentId.
+            streamId = id,
             type = "series",
             title = details.name,
             poster = video.thumbnail ?: details.poster,
@@ -842,8 +906,53 @@ internal object VirtualChannelRepository {
             if (normalized.join.maxStartPercent == 20) {
                 normalized = normalized.copy(join = normalized.join.copy(maxStartPercent = -1))
             }
+            // Series catalog channels used to run in fixed ROTATE slots, so a 22-minute episode
+            // sat frozen until the 45-minute boundary. Run them as a real-runtime queue.
+            if (normalized.kind == VirtualChannelKind.ADDON_SERIES &&
+                normalized.playout.mode == VirtualPlayoutMode.ROTATE
+            ) {
+                normalized = normalized.copy(
+                    playout = normalized.playout.copy(
+                        mode = VirtualPlayoutMode.LOOP,
+                        order = VirtualOrder.AIR,
+                    ),
+                )
+            }
             normalized
         }
+
+    /**
+     * Pools saved by the first mobile Lucid build used the parent series id as the stream id,
+     * and series catalogs were stored as whole shows. Repair the ids in place and force a
+     * refresh for the series catalogs so they are expanded into episodes.
+     */
+    private fun repairPools(
+        pools: Map<String, VirtualPoolSnapshot>,
+        specs: List<VirtualChannelSpec>,
+    ): Map<String, VirtualPoolSnapshot> {
+        if (pools.isEmpty()) return pools
+        val byId = specs.associateBy { it.id }
+        return pools.mapValues { (id, snapshot) ->
+            val repairedItems = snapshot.items.map { item ->
+                if (item.season != null && item.episode != null && item.streamId != item.id) {
+                    item.copy(streamId = item.id)
+                } else {
+                    item
+                }
+            }
+            val spec = byId[id]
+            val source = spec?.source
+            val wholeSeries = (spec?.kind == VirtualChannelKind.ADDON_SERIES) ||
+                (source is VirtualSource.AddonCatalog && source.contentType.equals("series", true))
+            val hasWholeSeriesItems = wholeSeries && repairedItems.any {
+                it.type == "series" && it.season == null
+            }
+            snapshot.copy(
+                items = repairedItems,
+                fetchedAtMs = if (hasWholeSeriesItems) 0L else snapshot.fetchedAtMs,
+            )
+        }
+    }
 
     private fun yearOf(text: String?): Int? {
         if (text.isNullOrBlank()) return null
@@ -862,4 +971,6 @@ internal object VirtualChannelRepository {
     private const val RETRY_AFTER_MS = 10L * 60 * 1000
     private const val MAX_CATALOG_PAGES = 50
     private const val MAX_RULE_CATALOGS = 6
+    private const val MAX_SERIES_TO_EXPAND = 8
+    private const val MAX_EPISODES_PER_SERIES = 40
 }
