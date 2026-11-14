@@ -104,6 +104,8 @@ data class WebBrowserUiState(
     val canGoForward: Boolean = false,
     val detectedMedia: List<WebMediaSource> = emptyList(),
     val error: String? = null,
+    /** Bumped when Android kills the WebView renderer, so the host creates a fresh WebView. */
+    val rendererGeneration: Int = 0,
 )
 
 /** What the common UI needs from the Android WebView. */
