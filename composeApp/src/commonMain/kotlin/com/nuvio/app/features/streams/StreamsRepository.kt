@@ -115,12 +115,20 @@ object StreamsRepository {
                 forceRefresh = false,
             )
         }
-        val state = withTimeoutOrNull(timeoutMs) {
+        val firstState = withTimeoutOrNull(timeoutMs) {
             _uiState.first { current ->
                 current.autoPlayStream != null ||
                     (!current.isAnyLoading && !current.isDirectAutoPlayFlow)
             }
-        } ?: _uiState.value
+        }
+        if (firstState != null && firstState.isAnyLoading) {
+            // Give the other add-ons a short moment to deliver their lists; the TV player waits
+            // for all of them, but Lucid TV must start quickly.
+            withTimeoutOrNull(1_500L) {
+                _uiState.first { !it.isAnyLoading }
+            }
+        }
+        val state = _uiState.value
         return state.groups
             .flatMap { it.streams }
             .distinctBy { stream ->

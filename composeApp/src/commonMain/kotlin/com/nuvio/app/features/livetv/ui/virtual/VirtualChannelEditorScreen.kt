@@ -153,7 +153,7 @@ fun VirtualChannelEditorScreen(
     }
     var playout by remember { mutableStateOf(existing?.playout ?: VirtualPlayout()) }
     var poolRules by remember { mutableStateOf(existing?.pool ?: VirtualPoolRules()) }
-    var join by remember { mutableStateOf(existing?.join ?: VirtualJoin(maxStartPercent = 20)) }
+    var join by remember { mutableStateOf(existing?.join ?: VirtualJoin()) }
     var picker by remember { mutableStateOf<PickerMode?>(if (source == null && channelId == null) PickerMode.SOURCE else null) }
     var confirmDelete by remember { mutableStateOf(false) }
     val pools by VirtualChannelRepository.pools.collectAsStateWithLifecycle()
@@ -431,7 +431,7 @@ fun VirtualChannelEditorScreen(
                         slotMinutes = if (catalogSource.contentType == "series") 45 else 90,
                         seriesSlotMinutes = 45,
                     )
-                    join = join.copy(maxStartPercent = 20)
+                    join = join.copy(maxStartPercent = -1)
                     if (name.isBlank()) {
                         name = listOf(catalogSource.addonName, catalogSource.catalogName)
                             .filter { it.isNotBlank() }

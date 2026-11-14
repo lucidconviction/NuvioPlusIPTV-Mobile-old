@@ -92,6 +92,7 @@ open class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         AutoSyncPreferencesAndroid.initialize(applicationContext) // AutoSync hook
         LiveTvPreferencesAndroid.initialize(applicationContext) // Live TV hook
+        com.nuvio.app.features.web.WebAppsStorage.initialize(applicationContext) // Web-Apps hook
         LiveTvStartup.start() // Live TV hook: background updates and Drive sync
         window.setBackgroundDrawableResource(R.color.nuvio_background)
         pipRemoteActionReceiver = PipRemoteActionReceiver.register(this)

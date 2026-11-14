@@ -305,6 +305,7 @@ internal object VirtualChannelRepository {
                             listOf(
                                 VirtualItem(
                                     id = source.itemId,
+                                    streamId = source.itemId,
                                     type = source.itemType,
                                     title = source.itemId,
                                 )
@@ -408,6 +409,7 @@ internal object VirtualChannelRepository {
 
     private fun itemOf(item: MetaPreview, defaultType: String = ""): VirtualItem = VirtualItem(
         id = item.id,
+        streamId = item.id,
         type = item.type.ifBlank { defaultType },
         title = item.name,
         poster = item.poster,
@@ -421,6 +423,7 @@ internal object VirtualChannelRepository {
 
     private fun seriesItemOf(details: MetaDetails): VirtualItem = VirtualItem(
         id = details.id,
+        streamId = details.id,
         type = "series",
         title = details.name,
         poster = details.poster,
@@ -435,6 +438,7 @@ internal object VirtualChannelRepository {
 
     private fun itemOf(details: MetaDetails, type: String): VirtualItem = VirtualItem(
         id = details.id,
+        streamId = details.id,
         type = type,
         title = details.name,
         poster = details.poster,
@@ -462,6 +466,7 @@ internal object VirtualChannelRepository {
             ?: "${details.id}:$season:$episode"
         return VirtualItem(
             id = id,
+            streamId = details.id,
             type = "series",
             title = details.name,
             poster = video.thumbnail ?: details.poster,
@@ -825,9 +830,20 @@ internal object VirtualChannelRepository {
 
     // ---------------------------------------------------------------- helpers
 
-    /** Every Lucid TV channel lives in one fixed group. */
+    /** Every Lucid TV channel lives in one fixed group, and joins at the real EPG position. */
     private fun normalizeSpecs(list: List<VirtualChannelSpec>): List<VirtualChannelSpec> =
-        list.map { if (it.group == VirtualChannels.DEFAULT_GROUP) it else it.copy(group = VirtualChannels.DEFAULT_GROUP) }
+        list.map { spec ->
+            var normalized = if (spec.group == VirtualChannels.DEFAULT_GROUP) {
+                spec
+            } else {
+                spec.copy(group = VirtualChannels.DEFAULT_GROUP)
+            }
+            // 20% was the old mobile default; it made playback start minutes away from the guide.
+            if (normalized.join.maxStartPercent == 20) {
+                normalized = normalized.copy(join = normalized.join.copy(maxStartPercent = -1))
+            }
+            normalized
+        }
 
     private fun yearOf(text: String?): Int? {
         if (text.isNullOrBlank()) return null

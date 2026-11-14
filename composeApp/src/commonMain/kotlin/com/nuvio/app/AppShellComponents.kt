@@ -36,6 +36,8 @@ import com.nuvio.app.features.home.HomeScreen
 import com.nuvio.app.features.home.MetaPreview
 import com.nuvio.app.features.library.LibraryItem
 import com.nuvio.app.features.library.LibraryScreen
+import com.nuvio.app.features.web.WebAppsScreen
+import com.nuvio.app.features.web.WebMediaSource
 import com.nuvio.app.CatalogLaunch
 import com.nuvio.app.CatalogLaunchStore
 import com.nuvio.app.navigation.CatalogRoute
@@ -145,6 +147,8 @@ internal data class AppTabActions(
     val onLiveTvPlayAddonItem: (MetaPreview) -> Unit = {},
     val onLiveTvAddonItemToMultiView: (MetaPreview) -> Unit = {},
     val onLiveTvOpenAddonSettings: () -> Unit = {},
+    val onWebPlayMedia: (WebMediaSource) -> Unit = {},
+    val onWebBrowserActiveChange: (Boolean) -> Unit = {},
 )
 
 @Composable
@@ -212,6 +216,14 @@ internal fun AppTabHost(
                 com.nuvio.app.features.youtube.YouTubeHost.screen?.invoke(
                     Modifier.fillMaxSize(),
                     actions.onYouTubePlay ?: {},
+                )
+            }
+
+            AppScreenTab.WebApps -> {
+                WebAppsScreen(
+                    onPlayMedia = actions.onWebPlayMedia,
+                    onBrowserActiveChange = actions.onWebBrowserActiveChange,
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
 

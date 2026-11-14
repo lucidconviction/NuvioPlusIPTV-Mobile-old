@@ -13,11 +13,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -72,7 +75,12 @@ internal fun MainTabsDestination(
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val isTabletLayout = useTabletFloatingTabBar || maxWidth >= 768.dp
-        val tabActions = remember(actions, isTabletLayout) { actions(isTabletLayout) }
+        val baseTabActions = remember(actions, isTabletLayout) { actions(isTabletLayout) }
+        var webBrowserActive by remember { mutableStateOf(false) }
+        val tabActions = remember(baseTabActions) {
+            baseTabActions.copy(onWebBrowserActiveChange = { webBrowserActive = it })
+        }
+        val hideTabChrome = selectedTab == AppScreenTab.WebApps && webBrowserActive
         val useNativeBottomTabs = if (useNativeNavigation) {
             useNativeTabBar
         } else {
@@ -87,7 +95,8 @@ internal fun MainTabsDestination(
         val showLiveTvTab = liveTvSettings.showInSidebar
         val liveTvLabel = stringResource(Res.string.livetv_title)
         val bottomNavigationOverlayPadding =
-            if (useNativeBottomTabs) 49.dp
+            if (hideTabChrome) 0.dp
+            else if (useNativeBottomTabs) 49.dp
             else if (!isTabletLayout && navBarStyleSetting != NavBarStyle.CLASSIC) 72.dp
             else 0.dp
         val floatingNavigationItems = listOfNotNull(
@@ -114,6 +123,12 @@ internal fun MainTabsDestination(
                 onClick = { onTabSelected(AppScreenTab.YouTube) },
                 icon = Icons.Filled.PlayCircle,
                 label = "YouTube",
+            ) else null,
+            if (com.nuvio.app.features.web.webAppsPlatformAvailable) FloatingNavigationItem(
+                selected = selectedTab == AppScreenTab.WebApps,
+                onClick = { onTabSelected(AppScreenTab.WebApps) },
+                icon = Icons.Filled.Public,
+                label = "Web-Apps",
             ) else null,
             if (showLiveTvTab) FloatingNavigationItem(
                 selected = selectedTab == AppScreenTab.LiveTv,
@@ -145,7 +160,7 @@ internal fun MainTabsDestination(
             containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets(0),
             bottomBar = {
-                if (!isTabletLayout && !useNativeBottomTabs && navBarStyleSetting == NavBarStyle.CLASSIC) {
+                if (!hideTabChrome && !isTabletLayout && !useNativeBottomTabs && navBarStyleSetting == NavBarStyle.CLASSIC) {
                     NuvioClassicNavigationBar {
                         NavItem(
                             selected = selectedTab == AppScreenTab.Home,
@@ -171,6 +186,14 @@ internal fun MainTabsDestination(
                                 onClick = { onTabSelected(AppScreenTab.YouTube) },
                                 icon = Icons.Filled.PlayCircle,
                                 contentDescription = "YouTube",
+                            )
+                        }
+                        if (com.nuvio.app.features.web.webAppsPlatformAvailable) {
+                            NavItem(
+                                selected = selectedTab == AppScreenTab.WebApps,
+                                onClick = { onTabSelected(AppScreenTab.WebApps) },
+                                icon = Icons.Filled.Public,
+                                contentDescription = "Web-Apps",
                             )
                         }
                         if (showLiveTvTab) {
@@ -208,13 +231,27 @@ internal fun MainTabsDestination(
                         actions = tabActions,
                         modifier = Modifier
                             .fillMaxSize()
-                            .then(if (isTabletLayout || navBarStyleSetting != NavBarStyle.CLASSIC) Modifier.hazeSource(state = navBarHazeState) else Modifier)
-                            .then(if (navBarStyleSetting == NavBarStyle.ADAPTIVE) Modifier.nestedScroll(navBarScrollState.nestedScrollConnection) else Modifier)
+                            .then(
+                                if (!hideTabChrome &&
+                                    (isTabletLayout || navBarStyleSetting != NavBarStyle.CLASSIC)
+                                ) {
+                                    Modifier.hazeSource(state = navBarHazeState)
+                                } else {
+                                    Modifier
+                                }
+                            )
+                            .then(
+                                if (!hideTabChrome && navBarStyleSetting == NavBarStyle.ADAPTIVE) {
+                                    Modifier.nestedScroll(navBarScrollState.nestedScrollConnection)
+                                } else {
+                                    Modifier
+                                }
+                            )
                             .padding(innerPadding),
                     )
                 }
 
-                if (isTabletLayout && !useNativeBottomTabs) {
+                if (isTabletLayout && !useNativeBottomTabs && !hideTabChrome) {
                     val tabletNavBarScrollState = remember { NuvioNavBarScrollState().apply { collapse() } }
                     FloatingNavigationBar(
                         modifier = Modifier.align(Alignment.TopCenter).widthIn(max = 416.dp),
@@ -230,7 +267,7 @@ internal fun MainTabsDestination(
                     )
                 }
 
-                if (!isTabletLayout && !useNativeBottomTabs && navBarStyleSetting != NavBarStyle.CLASSIC) {
+                if (!isTabletLayout && !useNativeBottomTabs && navBarStyleSetting != NavBarStyle.CLASSIC && !hideTabChrome) {
                     when (navBarStyleSetting) {
                         NavBarStyle.EXPANDED -> navBarScrollState.expand()
                         NavBarStyle.COMPACT -> navBarScrollState.collapse()

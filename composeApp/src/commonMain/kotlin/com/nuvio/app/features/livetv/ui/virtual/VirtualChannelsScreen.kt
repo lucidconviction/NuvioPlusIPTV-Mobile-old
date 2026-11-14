@@ -325,6 +325,32 @@ fun VirtualChannelsScreen(
                 )
             }
             Text(
+                text = "Source order",
+                style = MaterialTheme.typography.labelMedium,
+                color = tokens.colors.textMuted,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(NuvioTokens.Space.s6)) {
+                Chip(
+                    label = "Debrid first",
+                    selected = playbackSettings.preferDebrid,
+                    onClick = {
+                        VirtualChannelRepository.updateSettings(playbackSettings.copy(preferDebrid = true))
+                    },
+                )
+                Chip(
+                    label = "HTTP first",
+                    selected = !playbackSettings.preferDebrid,
+                    onClick = {
+                        VirtualChannelRepository.updateSettings(playbackSettings.copy(preferDebrid = false))
+                    },
+                )
+            }
+            Text(
+                text = "Debrid first gives debrid links a short head start, then falls back to HTTP. HTTP first starts a direct link immediately.",
+                style = MaterialTheme.typography.bodySmall,
+                color = tokens.colors.textMuted,
+            )
+            Text(
                 text = "Prefetch next items",
                 style = MaterialTheme.typography.labelMedium,
                 color = tokens.colors.textMuted,

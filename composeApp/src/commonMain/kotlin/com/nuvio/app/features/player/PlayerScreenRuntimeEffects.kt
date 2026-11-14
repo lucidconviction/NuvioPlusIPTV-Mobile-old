@@ -488,6 +488,7 @@ private fun PlayerScreenRuntime.BindPlayerUiVisibilityEffects() {
         snapshotSignals.isLoading,
         showParentalGuide,
         errorMessage,
+        contentType,
     ) {
         if (
             !controlsVisible ||
@@ -499,7 +500,14 @@ private fun PlayerScreenRuntime.BindPlayerUiVisibilityEffects() {
         ) {
             return@LaunchedEffect
         }
-        delay(if (folded) 5000 else 3500)
+        // YouTube's player buttons stay up longer; the controls are the main way to pause,
+        // change quality or open the video panel and they were disappearing too quickly.
+        val hideAfterMs = when {
+            contentType == "youtube" -> 7_000L
+            folded -> 5_000L
+            else -> 3_500L
+        }
+        delay(hideAfterMs)
         controlsVisible = false
     }
 

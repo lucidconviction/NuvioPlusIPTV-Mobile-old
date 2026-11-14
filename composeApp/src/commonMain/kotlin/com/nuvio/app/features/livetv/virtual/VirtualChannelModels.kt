@@ -83,6 +83,8 @@ sealed interface VirtualSource {
 /** One thing a virtual channel can play. Episodes carry their parent series id. */
 data class VirtualItem(
     val id: String,
+    /** The id used for stream search; for episodes this is the series id. Defaults to [id]. */
+    val streamId: String? = null,
     val type: String,
     val title: String,
     val poster: String? = null,
@@ -133,6 +135,8 @@ data class VirtualJoin(
 data class VirtualPlaybackSettings(
     /** When no direct stream is available, allow debrid/torrent sources to be resolved. */
     val allowDebrid: Boolean = true,
+    /** Try debrid before HTTP. Off means HTTP first, debrid only as fallback. */
+    val preferDebrid: Boolean = true,
     /** How many upcoming items to resolve in the background (0–4). */
     val prefetchNext: Int = 2,
 ) {

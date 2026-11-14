@@ -493,6 +493,7 @@ internal fun MainAppContent(
             }
             AppScreenTab.Library -> libraryScrollToTopRequests.tryEmit(Unit)
             AppScreenTab.YouTube -> Unit
+            AppScreenTab.WebApps -> Unit
             AppScreenTab.LiveTv -> liveTvScrollToTopRequests.tryEmit(Unit)
             AppScreenTab.Settings -> settingsRootActionRequests.tryEmit(Unit)
         }
@@ -1013,8 +1014,32 @@ internal fun MainAppContent(
             }
         }
 
-        fun openYouTubeVideo(request: com.nuvio.app.features.youtube.YouTubePlayRequest) {
-            val playerLaunch = PlayerLaunch(
+        fun openWebMedia(source: com.nuvio.app.features.web.WebMediaSource) {
+            val launch = PlayerLaunch(
+                profileId = activePlaybackProfileId,
+                title = source.title.ifBlank { source.url },
+                sourceUrl = source.url,
+                sourceHeaders = sanitizePlaybackHeaders(source.headers),
+                streamType = source.streamType,
+                logo = null,
+                poster = null,
+                background = null,
+                streamTitle = source.title.ifBlank { source.url },
+                streamSubtitle = source.pageUrl.takeIf { it.isNotBlank() },
+                pauseDescription = null,
+                providerName = "Web-Apps",
+                providerAddonId = "web",
+                contentType = "web",
+                videoId = "web:${source.url}",
+                parentMetaId = "web:${source.pageUrl}",
+                parentMetaType = "web",
+                initialPositionMs = 0L,
+            )
+            val launchId = PlayerLaunchStore.put(launch)
+            navController.navigate(PlayerRoute(launchId = launchId, title = launch.title))
+        }
+
+        fun openYouTubeVideo(request: com.nuvio.app.features.youtube.YouTubePlayRequest) {            val playerLaunch = PlayerLaunch(
                 profileId = activePlaybackProfileId,
                 title = request.title,
                 sourceUrl = request.url,
@@ -1914,6 +1939,7 @@ internal fun MainAppContent(
                                 onLiveTvPlayAddonItem = ::openLiveTvAddonItem,
                                 onLiveTvAddonItemToMultiView = ::addLiveTvAddonItemToMultiView,
                                 onLiveTvOpenAddonSettings = { navController.navigate(AddonsSettingsRoute(addonsSettingsTitle)) },
+                                onWebPlayMedia = ::openWebMedia,
                                 onLiveTvSettingsClick = {
                                     if (useNativeNavigation && !isTabletLayout) {
                                         activateTab(AppScreenTab.Settings)

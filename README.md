@@ -45,6 +45,9 @@
 - **Lucid TV:** virtual channels built from add-on catalogs, series marathons and playlist
   relays, with a generated guide, join-in-progress playback, HTTP-first tuning, optional debrid
   and next-2 prefetch.
+- **Web-Apps:** a built-in browser for saved streaming sites, with screenshot preview cards,
+  popup blocking, userscripts, adblock, HLS support and one-tap playback of detected videos in
+  Nuvio's player.
 
 ### 🏆 Sports
 - Scores, schedules and which of your channels are showing each game.

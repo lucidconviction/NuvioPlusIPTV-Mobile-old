@@ -61,7 +61,7 @@ internal object VirtualTuneResolver {
     private const val LINK_TTL_MS = 20L * 60_000L
     private const val ERROR_TTL_MS = 30_000L
     private const val ADDON_WAIT_MS = 4_000L
-    private const val TUNE_BUDGET_MS = 11_000L
+    private const val TUNE_BUDGET_MS = 20_000L
     private const val PREFETCH_BUDGET_MS = 45_000L
 
     private data class CachedStream(
@@ -96,7 +96,7 @@ internal object VirtualTuneResolver {
         if (!VirtualChannels.isVirtualKey(channel.key)) {
             return VirtualPlaybackOutcome(message = "That isn't a Lucid TV channel.")
         }
-        val tune = VirtualChannelRepository.tune(channel.key, nowMs)
+        var tune = VirtualChannelRepository.tune(channel.key, nowMs)
             ?: return VirtualPlaybackOutcome(message = "This channel has nothing to play right now.")
         if (tune.relay) {
             val stream = relayStream(tune)
@@ -106,20 +106,42 @@ internal object VirtualTuneResolver {
             return VirtualPlaybackOutcome(VirtualResolvedPlayback(tune, stream, launch, fromCache = true))
         }
         val settings = VirtualChannelRepository.settings.value
-        val result = withTimeoutOrNull(budgetMs) {
+        var result = withTimeoutOrNull(budgetMs) {
             streamFor(tune, settings, budgetMs)
         } ?: StreamResult(
             null,
             "This channel took too long to tune. Check your add-ons and try again.",
         )
-        val stream = result.stream
+        var stream = result.stream
             ?: return VirtualPlaybackOutcome(message = result.message ?: OFFLINE)
+
+        // Resolution can take seconds. Re-align the join offset with the guide afterwards, and if
+        // the slot rolled over while we were looking up a source, use the new slot instead.
+        val fresh = VirtualChannelRepository.tune(channel.key, LiveTvClock.nowMs())
+        if (fresh != null) {
+            if (sameItem(fresh, tune)) {
+                tune = fresh
+            } else {
+                val next = withTimeoutOrNull(budgetMs.coerceAtMost(8_000L)) {
+                    streamFor(fresh, settings, 8_000L)
+                }
+                if (next?.stream != null) {
+                    tune = fresh
+                    result = next
+                    stream = next.stream
+                }
+            }
+        }
+
         val launch = buildLaunch(channel, profileId, tune, stream)
             ?: return VirtualPlaybackOutcome(message = OFFLINE)
         return VirtualPlaybackOutcome(
             VirtualResolvedPlayback(tune, stream, launch, fromCache = result.fromCache),
         )
     }
+
+    private fun sameItem(a: VirtualTune, b: VirtualTune): Boolean =
+        a.item.id == b.item.id && a.season == b.season && a.episode == b.episode
 
     /** Resolves the item on now and the next [VirtualPlaybackSettings.prefetchNext] items. */
     suspend fun prefetch(channelKey: String, nowMs: Long = LiveTvClock.nowMs()) {
@@ -215,11 +237,11 @@ internal object VirtualTuneResolver {
         var candidates = withTimeoutOrNull(budgetMs.coerceAtMost(10_000L)) {
             StreamsRepository.resolveStreamCandidates(
                 type = tune.item.type,
-                videoId = tune.item.id,
-                parentMetaId = tune.item.parentId ?: tune.item.id,
+                videoId = tune.item.streamId?.takeIf { it.isNotBlank() } ?: tune.item.id,
+                parentMetaId = tune.item.parentId ?: tune.item.streamId?.takeIf { it.isNotBlank() } ?: tune.item.id,
                 season = tune.season,
                 episode = tune.episode,
-                timeoutMs = budgetMs.coerceAtMost(8_000L),
+                timeoutMs = budgetMs.coerceAtMost(15_000L),
             )
         }.orEmpty()
 
@@ -228,11 +250,11 @@ internal object VirtualTuneResolver {
             candidates = withTimeoutOrNull((budgetMs - (epochMs() - started)).coerceAtLeast(2_000L)) {
                 StreamsRepository.resolveStreamCandidates(
                     type = tune.item.type,
-                    videoId = tune.item.id,
-                    parentMetaId = tune.item.parentId ?: tune.item.id,
+                    videoId = tune.item.streamId?.takeIf { it.isNotBlank() } ?: tune.item.id,
+                    parentMetaId = tune.item.parentId ?: tune.item.streamId?.takeIf { it.isNotBlank() } ?: tune.item.id,
                     season = tune.season,
                     episode = tune.episode,
-                    timeoutMs = budgetMs.coerceAtMost(8_000L),
+                    timeoutMs = budgetMs.coerceAtMost(15_000L),
                     forceRefresh = true,
                 )
             }.orEmpty()
@@ -249,6 +271,18 @@ internal object VirtualTuneResolver {
         return result
     }
 
+    private data class Candidate(
+        val stream: StreamItem,
+        val priority: Int,
+        val debrid: Boolean,
+    )
+
+    /**
+     * Resolves a small set of sources in parallel, the way the TV player does. Direct links,
+     * server sources and debrid resolutions all start together; the source order setting decides
+     * which result is allowed to win, and a short grace period keeps a fast direct link from
+     * beating a debrid source that is about to resolve.
+     */
     private suspend fun resolveCandidates(
         tune: VirtualTune,
         settings: VirtualPlaybackSettings,
@@ -257,65 +291,124 @@ internal object VirtualTuneResolver {
     ): StreamResult {
         if (candidates.isEmpty()) return failureForEmptyCandidates(tune, settings)
         val deadline = epochMs() + remainingBudgetMs.coerceAtLeast(2_000L)
-
         fun remaining(): Long = (deadline - epochMs()).coerceAtLeast(500L)
 
-        // 1. Direct HTTP. Start at once: this is the TV-fast path.
-        candidates.firstOrNull { it.playableDirectUrl != null }?.let {
-            return StreamResult(it)
-        }
-
-        // 2. Server-hosted sources (prepare once, then it is a direct URL).
-        candidates
-            .filter { it.serverTarget != null || it.needsServerPreparation }
-            .distinctBy { it.preparationIdentity() }
-            .forEach { candidate ->
-                val prepared = withTimeoutOrNull(remaining().coerceAtMost(4_000L)) {
-                    runCatching { ServerPlayback.prepare(candidate) }.getOrNull()
-                } ?: return@forEach
-                if (prepared.playableDirectUrl != null) return StreamResult(prepared)
-            }
-
-        // 3. YouTube-only sources.
-        candidates.firstOrNull { it.youTubeIdToResolve != null }?.let { candidate ->
-            val resolved = withTimeoutOrNull(remaining().coerceAtMost(5_000L)) {
-                runCatching { YouTubeStreamResolver.Default.resolve(candidate) }.getOrNull()
-            }
-            if (resolved?.playableDirectUrl != null) return StreamResult(resolved)
-        }
-
-        // 4. Debrid: cached first, then resolve fresh. Only when the user allows it.
-        if (settings.allowDebrid) {
-            DebridSettingsRepository.ensureLoaded()
-            val debridCandidates = candidates
+        DebridSettingsRepository.ensureLoaded()
+        val debridCandidates = if (settings.allowDebrid) {
+            candidates
                 .filter { DirectDebridPlaybackResolver.shouldResolveToPlayableStream(it) }
                 .distinctBy { it.preparationIdentity() }
-            debridCandidates.forEach { candidate ->
-                DirectDebridPlaybackResolver.cachedPlayableStream(candidate, tune.season, tune.episode)?.let { cached ->
-                    if (cached.playableDirectUrl != null) return StreamResult(cached)
-                }
+        } else {
+            emptyList()
+        }
+        val directCandidates = candidates
+            .filter { it.playableDirectUrl != null }
+            .distinctBy { it.preparationIdentity() }
+        val serverCandidates = candidates
+            .filter { it.playableDirectUrl == null && (it.serverTarget != null || it.needsServerPreparation) }
+            .distinctBy { it.preparationIdentity() }
+        val youTubeCandidates = candidates
+            .filter { it.playableDirectUrl == null && it.youTubeIdToResolve != null }
+            .distinctBy { it.preparationIdentity() }
+
+        val plans = buildList {
+            // Priority 0 wins first; 1 is direct/server; 2 is fallback debrid.
+            if (settings.preferDebrid) {
+                debridCandidates.forEach { add(Candidate(it, 0, debrid = true)) }
+                directCandidates.forEach { add(Candidate(it, 1, debrid = false)) }
+            } else {
+                directCandidates.forEach { add(Candidate(it, 0, debrid = false)) }
+                debridCandidates.forEach { add(Candidate(it, 2, debrid = true)) }
             }
-            for (candidate in debridCandidates) {
-                if (epochMs() >= deadline) break
-                val resolved = withTimeoutOrNull(remaining().coerceAtMost(8_000L)) {
-                    runCatching {
-                        DirectDebridPlaybackResolver.resolveToPlayableStream(candidate, tune.season, tune.episode)
-                    }.getOrNull()
-                }
-                val playable = (resolved as? DirectDebridPlayableResult.Success)?.stream
-                if (playable?.playableDirectUrl != null) return StreamResult(playable)
-            }
+            serverCandidates.forEach { add(Candidate(it, 1, debrid = false)) }
+            youTubeCandidates.forEach { add(Candidate(it, 1, debrid = false)) }
+        }.distinctBy { it.stream.preparationIdentity() }.take(MAX_PARALLEL_SOURCES)
+
+        val p2pFallback = if (AppFeaturePolicy.p2pEnabled) {
+            candidates.firstOrNull { it.p2pInfoHash != null && it.playableDirectUrl == null }
+        } else {
+            null
         }
 
-        // 5. True P2P: hand it to the player's own torrent path. It can't become a direct URL here.
-        if (AppFeaturePolicy.p2pEnabled) {
-            candidates.firstOrNull { it.p2pInfoHash != null && it.playableDirectUrl == null }?.let {
-                return StreamResult(it)
-            }
+        if (plans.isEmpty()) {
+            p2pFallback?.let { return StreamResult(it) }
+            return failureForCandidates(tune, settings, candidates)
         }
 
-        val directOnly = settings.allowDebrid.not() && candidates.any {
-            DirectDebridPlaybackResolver.shouldResolveToPlayableStream(it)
+        val results = kotlinx.coroutines.channels.Channel<Pair<Int, StreamItem>>(
+            kotlinx.coroutines.channels.Channel.UNLIMITED,
+        )
+        val jobs = plans.map { plan ->
+            scope.async {
+                val resolved = resolveCandidate(plan.stream, tune, remaining())
+                if (resolved != null) results.send(plan.priority to resolved)
+            }
+        }
+        val graceMs = if (settings.preferDebrid && plans.any { it.priority == 0 }) 1_500L else 250L
+        var chosen = withTimeoutOrNull(graceMs.coerceAtMost(remaining())) { results.receive() }
+        if (chosen == null) {
+            chosen = withTimeoutOrNull(remaining()) { results.receive() }
+        }
+        // A fast HTTP result must not hide a debrid result that was already on its way.
+        if (
+            chosen != null && settings.preferDebrid && plans.any { it.priority == 0 } &&
+            chosen!!.first > 0
+        ) {
+            val debridResult = withTimeoutOrNull(graceMs) { results.receive() }
+            if (debridResult != null && debridResult.first == 0) chosen = debridResult
+        }
+        jobs.forEach { it.cancel() }
+        results.close()
+
+        chosen?.second?.let { return StreamResult(it) }
+        p2pFallback?.let { return StreamResult(it) }
+        return failureForCandidates(tune, settings, candidates)
+    }
+
+    private suspend fun resolveCandidate(
+        stream: StreamItem,
+        tune: VirtualTune,
+        remainingMs: Long,
+    ): StreamItem? {
+        stream.playableDirectUrl?.let { return stream }
+
+        if (stream.serverTarget != null || stream.needsServerPreparation) {
+            val prepared = withTimeoutOrNull(remainingMs.coerceAtMost(8_000L)) {
+                runCatching { ServerPlayback.prepare(stream) }.getOrNull()
+            }
+            if (prepared?.playableDirectUrl != null) return prepared
+        }
+
+        if (stream.youTubeIdToResolve != null) {
+            val resolved = withTimeoutOrNull(remainingMs.coerceAtMost(8_000L)) {
+                runCatching { YouTubeStreamResolver.Default.resolve(stream) }.getOrNull()
+            }
+            if (resolved?.playableDirectUrl != null) return resolved
+        }
+
+        if (DirectDebridPlaybackResolver.shouldResolveToPlayableStream(stream)) {
+            DirectDebridPlaybackResolver.cachedPlayableStream(stream, tune.season, tune.episode)?.let { cached ->
+                if (cached.playableDirectUrl != null) return cached
+            }
+            val resolved = withTimeoutOrNull(remainingMs.coerceAtMost(MAX_DEBRID_RESOLVE_MS)) {
+                runCatching {
+                    DirectDebridPlaybackResolver.resolveToPlayableStream(stream, tune.season, tune.episode)
+                }.getOrNull()
+            }
+            val playable = (resolved as? DirectDebridPlayableResult.Success)?.stream
+            if (playable?.playableDirectUrl != null) return playable
+        }
+        return null
+    }
+
+    private fun failureForCandidates(
+        tune: VirtualTune,
+        settings: VirtualPlaybackSettings,
+        candidates: List<StreamItem>,
+    ): StreamResult {
+        val directOnly = !settings.allowDebrid && candidates.any {
+            DebridSettingsRepository.snapshot().canResolvePlayableLinks &&
+                DirectDebridPlaybackResolver.shouldResolveToPlayableStream(it)
         }
         if (directOnly) {
             return StreamResult(
@@ -379,7 +472,7 @@ internal object VirtualTuneResolver {
     private fun cacheKey(tune: VirtualTune, settings: VirtualPlaybackSettings): String = listOf(
         tune.specId,
         tune.item.type,
-        tune.item.id,
+        tune.item.streamId?.takeIf { it.isNotBlank() } ?: tune.item.id,
         tune.item.parentId.orEmpty(),
         tune.season ?: 0,
         tune.episode ?: 0,
@@ -388,8 +481,8 @@ internal object VirtualTuneResolver {
 
     private fun linkKey(tune: VirtualTune): String = StreamLinkCacheRepository.contentKey(
         type = tune.item.type,
-        videoId = tune.item.id,
-        parentMetaId = tune.item.parentId ?: tune.item.id,
+        videoId = tune.item.streamId?.takeIf { it.isNotBlank() } ?: tune.item.id,
+        parentMetaId = tune.item.parentId ?: tune.item.streamId?.takeIf { it.isNotBlank() } ?: tune.item.id,
         season = tune.season,
         episode = tune.episode,
     )
@@ -527,6 +620,8 @@ internal object VirtualTuneResolver {
     }
 
     private val BLOCKED_TTL_MS = 5L * 60_000L
+    private const val MAX_PARALLEL_SOURCES = 12
+    private const val MAX_DEBRID_RESOLVE_MS = 20_000L
 
     private const val OFFLINE = "This Lucid TV channel is offline right now"
 }

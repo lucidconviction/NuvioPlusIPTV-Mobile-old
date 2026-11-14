@@ -192,6 +192,7 @@ object VirtualChannelCodec {
 
     fun encodeItem(item: VirtualItem): JsonObject = buildJsonObject {
         put("id", item.id)
+        put("streamId", item.streamId ?: "")
         put("type", item.type)
         put("title", item.title)
         put("poster", item.poster ?: "")
@@ -211,6 +212,7 @@ object VirtualChannelCodec {
 
     fun decodeItem(o: JsonObject): VirtualItem = VirtualItem(
         id = o.optString("id"),
+        streamId = o.optString("streamId").ifBlank { null },
         type = o.optString("type").ifBlank { "movie" },
         title = o.optString("title").ifBlank { o.optString("id") },
         poster = o.optString("poster").ifBlank { null },
@@ -258,6 +260,7 @@ object VirtualChannelCodec {
 
     fun encodePlaybackSettings(settings: VirtualPlaybackSettings): String = buildJsonObject {
         put("allowDebrid", settings.allowDebrid)
+        put("preferDebrid", settings.preferDebrid)
         put("prefetchNext", settings.prefetchNext)
     }.toString()
 
@@ -267,6 +270,7 @@ object VirtualChannelCodec {
             val o = parseObject(raw)
             VirtualPlaybackSettings(
                 allowDebrid = o.optBoolean("allowDebrid", true),
+                preferDebrid = o.optBoolean("preferDebrid", true),
                 prefetchNext = o.optInt("prefetchNext", 2)
                     .coerceIn(VirtualPlaybackSettings.MIN_PREFETCH, VirtualPlaybackSettings.MAX_PREFETCH),
             )
